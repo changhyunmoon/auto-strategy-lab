@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>종목 관리</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🪙 종목 관리</span></div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('🪙', '종목 관리', '데이터 가져오기 화면의 종목 선택지와, 종목마다 데이터를 받을 거래소 마켓입니다.')}"></div>
+
+  <h2 class="section-title">종목 <span class="count" th:text="${assets.size()}">2</span></h2>
+  <div class="db-table-wrap">
+    <table class="db-table">
+      <thead><tr><th>코드</th><th>이름</th><th style="width:80px">사용</th></tr></thead>
+      <tbody>
+      <tr th:each="a : ${assets}">
+        <td><b th:text="${a.code}">BTC</b></td>
+        <td th:text="${a.name}">비트코인</td>
+        <td><label class="switch"><input type="checkbox" th:checked="${a.enabled}" th:data-url="@{/api/assets/{id}(id=${a.id})}"><span></span></label></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="section-title">거래소 마켓 <span class="count" th:text="${markets.size()}">4</span></h2>
+  <div class="db-table-wrap">
+    <table class="db-table">
+      <thead><tr><th>거래소</th><th>거래쌍</th><th>표시 통화</th><th>역할</th><th>DB에 있는 기간 (KST)</th><th style="width:80px">사용</th></tr></thead>
+      <tbody>
+      <tr th:each="m : ${markets}">
+        <td th:text="${m.exchange.label}">업비트</td>
+        <td class="mono" th:text="${m.symbol}">KRW-BTC</td>
+        <td th:text="${m.quoteCurrency}">KRW</td>
+        <td><span class="tag" th:classappend="${m.role.name() == 'EXECUTION'} ? 'tag-blue'" th:text="${m.role.label}">실행</span></td>
+        <td class="num coverage" th:data-market="${m.id}"><span class="faint">확인 중</span></td>
+        <td><label class="switch"><input type="checkbox" th:checked="${m.enabled}" th:data-url="@{/api/markets/{id}(id=${m.id})}"><span></span></label></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout" style="margin-top:20px">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body small">끈 종목·마켓은 데이터 가져오기에서 고를 수 없습니다. 새 종목·마켓 등록은 다음 단계에서 추가합니다.</div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script>
+    $(function () {
+      $(document).on('change', '.switch input', function () {
+        var $input = $(this), on = this.checked;
+        App.api('PATCH', $input.data('url'), { enabled: on })
+          .done(function () { App.toast(on ? '사용으로 바꿨습니다.' : '사용 안 함으로 바꿨습니다.', 'blue'); })
+          .fail(function () { $input.prop('checked', !on); });
+      });
+      App.api('GET', '/api/coverage').done(function (list) {
+        list.forEach(function (c) {
+          var $td = $('.coverage[data-market="' + c.marketId + '"]');
+          if (c.first) $td.text(c.first + ' ~ ' + c.last + ' · ' + App.formatNumber(c.count) + '개');
+          else $td.html('<span class="faint">없음</span>');
+        });
+      });
+    });
+  </script>
+</th:block>
+</body>
+</html>

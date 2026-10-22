@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${d.summary.name}">데이터세트 상세</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/datasets}">🗂️ 데이터세트</a><span class="sep">/</span>
+  <span class="crumb current" th:text="${d.summary.name}">이름</span>
+  <span class="topbar-actions">
+    <a class="btn btn-ghost btn-sm" th:href="@{/collect(copy=${d.summary.id})}">같은 설정으로 새로 만들기</a>
+    <button class="btn btn-danger-ghost btn-sm" id="deleteBtn" th:unless="${d.summary.building}">삭제</button>
+  </span>
+</div>
+
+<div layout:fragment="content" class="page" style="max-width:1100px"
+     th:data-id="${d.summary.id}" th:data-job="${d.summary.jobId}" th:data-building="${d.summary.building}"
+     th:data-name="${d.summary.name}" id="detailPage">
+  <div class="page-head">
+    <div class="page-icon">🗂️</div>
+    <h1 class="page-title" th:text="${d.summary.name}">이름</h1>
+  </div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label"><span class="prop-icon">◉</span>상태</div>
+      <div class="prop-value">
+        <span th:replace="~{fragments/ui :: statusTag(${d.summary.status}, ${d.summary.statusLabel})}"></span>
+        <span class="small" style="color:var(--tag-red-fg)" th:if="${d.summary.status == 'FAILED'}" th:text="${d.summary.message}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
+      <div class="prop-value"><span class="tag" th:each="a : ${d.summary.assets}" th:text="${a}">BTC</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">📅</span>기간 (KST)</div>
+      <div class="prop-value"><span class="num" th:text="${d.rangeText}"></span>
+        <span class="muted small" th:if="${!#strings.isEmpty(d.warmupText)}" th:text="${'· 워밍업 ' + d.warmupText + '부터'}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🔌</span>출처</div>
+      <div class="prop-value"><span class="tag" th:each="s : ${d.sourceLabels}" th:text="${s}">업비트</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">⏱️</span>간격</div>
+      <div class="prop-value"><span class="tag" th:each="i : ${d.summary.intervals}" th:text="${i}">1분</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">#</span>크기</div>
+      <div class="prop-value">
+        <th:block th:if="${d.summary.status == 'READY'}"><span class="num" th:text="${#numbers.formatInteger(d.summary.rowCount, 1, 'COMMA')}">0</span>행 ·</th:block>
+        <span class="num" th:text="${d.summary.columnCount}">0</span>열
+        <span class="muted small" th:text="${'(봉 6 + 지표 ' + d.featureColumnCount + ')'}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🕒</span>생성</div>
+      <div class="prop-value"><th:block th:text="${d.summary.createdAt}"></th:block>
+        <span class="muted" th:if="${!#strings.isEmpty(d.duration)}" th:text="${'· 소요 ' + d.duration}"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 만드는 중이면 진행률 -->
+  <div th:if="${d.summary.building}" style="margin-top:24px" id="buildingBox">
+    <div class="progress-thin"><span id="progressBar" th:style="${'width:' + d.summary.progress + '%'}"></span></div>
+    <div class="small muted" style="margin-top:6px" id="progressText" th:text="${d.summary.progress + '% · ' + d.summary.step}"></div>
+  </div>
+
+  <div style="margin:20px 0 4px" th:if="${d.summary.status == 'READY'}">
+    <a class="btn btn-primary" th:href="@{/viz(datasetId=${d.summary.id})}">📊 시각화로 열기</a>
+  </div>
+
+  <div data-tabs-scope style="margin-top:28px">
+    <div class="tabs">
+      <div class="tab active" data-tab="columns">열 목록 <span class="faint" th:text="${d.columns.size()}">0</span></div>
+      <div class="tab" data-tab="quality">품질
+        <span class="tag tag-yellow" style="margin-left:4px" th:if="${!d.gaps.isEmpty()}" th:text="${'빈 구간 ' + d.gaps.size()}"></span>
+      </div>
+      <div class="tab" data-tab="preview" th:if="${d.summary.status == 'READY'}">미리보기</div>
+    </div>
+
+    <div class="tab-panel active" data-panel="columns">
+      <div class="db-table-wrap">
+        <table class="db-table">
+          <thead><tr><th class="num">#</th><th>열 이름</th><th>지표</th><th>그룹</th><th>파라미터</th></tr></thead>
+          <tbody>
+          <tr th:each="c : ${d.columns}">
+            <td class="num faint" th:text="${c.index + 1}">1</td>
+            <td class="mono" th:text="${c.name}">close</td>
+            <td th:text="${c.featureName}">봉 값</td>
+            <td><span class="tag" th:text="${c.group}">-</span></td>
+            <td class="muted" th:text="${c.param}"></td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="quality">
+      <div class="empty" th:if="${d.qualities.isEmpty()}">품질 보고서는 데이터세트가 완료되면 만들어집니다.</div>
+      <th:block th:unless="${d.qualities.isEmpty()}">
+        <div class="db-table-wrap">
+          <table class="db-table">
+            <thead><tr><th>마켓</th><th class="num">예상 분 수</th><th class="num">실제</th><th class="num">채움률</th><th>비고</th></tr></thead>
+            <tbody>
+            <tr th:each="q : ${d.qualities}">
+              <td th:text="${q.market}">업비트 KRW-BTC</td>
+              <td class="num" th:text="${#numbers.formatInteger(q.expected, 1, 'COMMA')}">0</td>
+              <td class="num" th:text="${#numbers.formatInteger(q.actual, 1, 'COMMA')}">0</td>
+              <td class="num" th:text="${q.fillRate}">100%</td>
+              <td><span class="tag" th:classappend="${q.ok} ? 'tag-green' : 'tag-yellow'" th:text="${q.notes}">정상</span></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <th:block th:unless="${d.gaps.isEmpty()}">
+          <h2 class="section-title">빈 구간 <span class="count">긴 순 · 마켓별 최대 100개</span></h2>
+          <div class="db-table-wrap">
+            <table class="db-table db-table--compact">
+              <thead><tr><th>마켓</th><th>시작 (KST)</th><th>끝 (KST)</th><th class="num">분</th></tr></thead>
+              <tbody>
+              <tr th:each="g : ${d.gaps}">
+                <td th:text="${g.market}"></td>
+                <td class="num" th:text="${g.from}"></td>
+                <td class="num" th:text="${g.to}"></td>
+                <td class="num" th:text="${#numbers.formatInteger(g.minutes, 1, 'COMMA')}"></td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+        </th:block>
+        <div class="callout" style="margin-top:16px">
+          <div class="callout-icon">ℹ️</div>
+          <div class="callout-body small">빈 구간은 값을 채우지 않고 비워 둡니다. 업비트는 거래가 없던 분에 봉이 없어서 빈 구간이 생길 수 있습니다.</div>
+        </div>
+      </th:block>
+    </div>
+
+    <div class="tab-panel" data-panel="preview" th:if="${d.summary.status == 'READY'}">
+      <div class="toolbar">
+        <span class="chip-group">
+          <label class="chip" th:each="a, st : ${d.assets}">
+            <input type="radio" name="pvAsset" th:value="${a.id}" th:checked="${st.first}"><th:block th:text="${a.code}">BTC</th:block>
+          </label>
+        </span>
+        <span class="chip-group" style="margin-left:8px">
+          <label class="chip" th:each="iv, st : ${d.intervals}">
+            <input type="radio" name="pvInterval" th:value="${iv}" th:checked="${st.first}"><th:block th:text="${iv.replace('m', '분')}">1분</th:block>
+          </label>
+        </span>
+        <span class="spacer"></span>
+        <label class="small muted" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+          <input type="checkbox" class="form-check-input" style="margin:0" id="pvWarmup">워밍업 행 보기
+        </label>
+      </div>
+      <div class="db-table-wrap">
+        <table class="db-table db-table--compact" id="previewTable"></table>
+      </div>
+      <div class="table-footer">
+        <span id="pvInfo"></span>
+        <span class="pager">
+          <button class="btn btn-ghost btn-sm" id="pvPrev">‹ 이전</button>
+          <button class="btn btn-ghost btn-sm" id="pvNext">다음 ›</button>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:src="@{/js/dataset-detail.js}"></script>
+</th:block>
+</body>
+</html>

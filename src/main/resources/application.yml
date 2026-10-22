@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: auto-strategy-lab
+  profiles:
+    # 비밀번호 등은 application-local.yml(깃에 올리지 않음)에서 덮어쓴다
+    include: local
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/strategy?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:strategy}
+    password: ${DB_PASSWORD:strategy}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none        # 테이블은 Flyway(db/migration)로만 만든다
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 1000
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  thymeleaf:
+    cache: false
+
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.mch.strategy: INFO

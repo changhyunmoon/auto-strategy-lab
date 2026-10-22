@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- 페이지 머리: 큰 아이콘 → 제목 → 회색 설명 -->
+<div th:fragment="pageHead(icon, title, desc)" class="page-head">
+  <div class="page-icon" th:text="${icon}">📄</div>
+  <h1 class="page-title" th:text="${title}">제목</h1>
+  <div class="page-desc" th:if="${desc != null}" th:text="${desc}">설명</div>
+</div>
+
+<!-- 상태 태그: DatasetStatus 이름을 받아 색을 정한다 -->
+<span th:fragment="statusTag(status, label)" class="tag"
+      th:classappend="${status == 'READY'} ? 'tag-green' : (${status == 'FAILED'} ? 'tag-red' : (${status == 'PENDING'} ? '' : 'tag-blue'))">
+  <span class="dot"></span><th:block th:text="${label}">상태</th:block>
+</span>
+
+</body>
+</html>

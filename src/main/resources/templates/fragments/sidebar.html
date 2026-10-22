@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- menu: 현재 메뉴 이름 (컨트롤러가 model 에 "menu" 로 넣는다) -->
+<aside class="sidebar" th:fragment="sidebar(menu)">
+  <div class="sidebar-brand"><span class="brand-icon">S</span>자동 전략 탐색</div>
+  <a class="nav-item" th:classappend="${menu == 'collect'} ? 'active'" th:href="@{/collect}"><span class="nav-icon">📥</span>데이터 가져오기</a>
+  <a class="nav-item" th:classappend="${menu == 'datasets'} ? 'active'" th:href="@{/datasets}"><span class="nav-icon">🗂️</span>데이터세트</a>
+  <a class="nav-item" th:classappend="${menu == 'viz'} ? 'active'" th:href="@{/viz}"><span class="nav-icon">📊</span>시각화</a>
+  <a class="nav-item" th:classappend="${menu == 'instruments'} ? 'active'" th:href="@{/instruments}"><span class="nav-icon">🪙</span>종목 관리</a>
+  <div class="sidebar-section">다음 단계</div>
+  <a class="nav-item disabled"><span class="nav-icon">⚙️</span>데이터 가공<span class="soon">예정</span></a>
+  <a class="nav-item disabled"><span class="nav-icon">🧠</span>모델 학습<span class="soon">예정</span></a>
+  <div class="sidebar-footer">시각은 KST로 표시</div>
+</aside>
+</body>
+</html>
