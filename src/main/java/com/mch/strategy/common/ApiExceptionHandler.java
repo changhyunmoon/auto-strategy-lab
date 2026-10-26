@@ -30,6 +30,11 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of("message", message));
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handle(org.springframework.http.converter.HttpMessageNotReadableException e) {
+        return ResponseEntity.badRequest().body(Map.of("message", "요청 형식이 잘못되었습니다. (JSON · UTF-8 확인)"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handle(Exception e) {
         log.error("API 오류", e);
