@@ -64,11 +64,20 @@ class MlTemplateRenderTest {
         ds.put("featureColumns", 20);
         m.put("datasets", List.of(ds));
         m.put("groups", List.of(Map.of("code", "A", "label", "A. 수익률·모멘텀")));
-        m.put("thresholds", List.of(0.1, 0.3, 0.5, 0.7, 1.0));
+        Map<String, Object> labelOptions = new LinkedHashMap<>();
+        labelOptions.put("horizons", List.of(1, 5, 10));
+        labelOptions.put("fixed", List.of(0.1, 0.3, 0.5));
+        labelOptions.put("volKs", List.of(0.5, 1.0));
+        labelOptions.put("volWindows", List.of(20, 60));
+        labelOptions.put("margins", List.of(0.0, 0.1));
+        labelOptions.put("defaultFeePct", 0.05);
+        labelOptions.put("defaultSlippagePct", 0.02);
+        m.put("labelOptions", labelOptions);
         m.put("copy", null);
         m.put("datasetId", null);
         String form = render("trainsets/new", m);
-        assertThat(form).contains("datasetSel", "BTC·ETH 7일", "±0.3%", "/js/trainset-new.js", "var DATASETS =", "\"featureColumns\":20");
+        assertThat(form).contains("datasetSel", "BTC·ETH 7일", "±0.3%", "/js/trainset-new.js", "var DATASETS =", "\"featureColumns\":20",
+                "TRIPLE_BARRIER", "data-mode=\"VOLATILITY\"", "labelPreview", "data-term=\"horizon\"", "var LABEL_OPTS =", "/js/glossary.js");
 
         Map<String, Object> d = base("trainsets");
         d.put("t", trainSetDetail("READY"));
@@ -88,10 +97,12 @@ class MlTemplateRenderTest {
         m.put("trainUnits", List.of(new ModelRunViews.Choice(RunOptions.TrainUnit.PER_ASSET.name(), "자산별 모델", "설명")));
         m.put("balances", List.of(new ModelRunViews.Choice("NONE", "미적용", "설명")));
         m.put("earlyStoppings", List.of(new ModelRunViews.Choice("TRAIN_TAIL", "학습 구간 끝 10%", "설명")));
+        m.put("validations", List.of(new ModelRunViews.Choice("WALK_FORWARD_EXPANDING", "확장형 워크포워드", "설명")));
         m.put("copy", null);
         m.put("selectedSetId", 5L);
         String html = render("training/index", m);
-        assertThat(html).contains("setSel", "data-threshold=\"0.3\"", "var MODELS =", "\"shrinkage\"", "/js/training.js", "학습 시작");
+        assertThat(html).contains("setSel", "data-horizon=\"5\"", "var MODELS =", "\"shrinkage\"", "/js/training.js", "학습 시작",
+                "WALK_FORWARD_EXPANDING", "wfTimeline", "data-term=\"purge\"");
     }
 
     @Test
@@ -105,7 +116,8 @@ class MlTemplateRenderTest {
         d.put("r", runDetail("READY"));
         String html = render("runs/detail", d);
         assertThat(html).contains("그래디언트 부스팅", "학습률 0.05", "최종 테스트 실행", "/js/run-result.js",
-                "/api/runs/9/predictions?id=9&amp;split=val".replace("?id=9&amp;", "?"), "소요 12.5초");
+                "/api/runs/9/predictions?id=9&amp;split=val".replace("?id=9&amp;", "?"), "소요 12.5초",
+                "💰 거래 성과", "/js/run-trade.js", "확장형 워크포워드 · 폴드 4", "data-horizon=\"5\"", "valExtra");
 
         d.put("r", runDetail("RUNNING"));
         assertThat(render("runs/detail", d)).contains("trainProgress").doesNotContain("testBtn");
@@ -115,6 +127,7 @@ class MlTemplateRenderTest {
         boolean building = status.equals("BUILDING");
         TrainingSetViews.Summary s = new TrainingSetViews.Summary(5, "BTC·ETH 1분 ±0.3%", status, building ? "만드는 중" : "완료", building,
                 3, "BTC·ETH 7일", List.of("BTC", "ETH"), "1분", List.of("15분"), List.of("A", "C"), "0.3",
+                "5봉(1분) 뒤 종가 수익률 · 기준 ±0.3%", 5,
                 "2026-01-01 ~ 2026-06-30", "2026-07-01 ~ 2026-09-30", "2026-10-01 ~ 2026-10-21",
                 building ? 0 : 123456, building ? 0 : 40, "2026-10-26 15:00", 7L, building ? 40 : 100, "BTC 정답 · 구간 계산", "", 2);
         return new TrainingSetViews.Detail(s, false, List.of("A. 수익률·모멘텀"), building ? List.of() : List.of("rsi_14", "rsi_14@15m"),
@@ -127,10 +140,12 @@ class MlTemplateRenderTest {
         params.put("shrinkage", 0.05);
         ModelRunViews.Summary s = new ModelRunViews.Summary(9, "실험 · 그래디언트 부스팅", 5, "BTC·ETH 1분 ±0.3%", "GRADIENT_BOOSTING",
                 "그래디언트 부스팅", "트리", status, busy ? "학습 중" : "완료", busy, "자산별 모델", "미적용", params, 42, 200000,
-                0.5, 0.9, 0.4, 0.38, 0.3, 0.32, "NONE", null, null, null, null, 0, "", busy ? null : 12.5, "2026-10-26 15:00",
+                0.5, 0.9, 0.4, 0.38, 0.3, 0.32, "확장형 워크포워드", 4, 0.37, 0.02, 0.35, 1.25, 3.5, 40,
+                "NONE", null, null, null, null, null, null, null, 0, "", busy ? null : 12.5, "2026-10-26 15:00",
                 11L, 50, "BTC 학습 · 트리 10 / 300", null, 0, "", "");
         return new ModelRunViews.Detail(s, "설명", true, List.of(new ModelRunViews.ParamView("학습률", "0.05")),
-                "자산별", "미적용", "학습 구간 끝 10%", true, "", "1분", "0.3", List.of("BTC", "ETH"),
+                "자산별", "미적용", "학습 구간 끝 10%", "확장형 워크포워드 · 폴드 4 · 첫 학습 50%", "설명",
+                "5봉(1분) 뒤 종가 수익률 · 기준 ±0.3%", 5, true, "", "1분", "0.3", List.of("BTC", "ETH"),
                 "2026-01-01 ~ 2026-06-30", "2026-07-01 ~ 2026-09-30", "2026-10-01 ~ 2026-10-21", Map.of());
     }
 

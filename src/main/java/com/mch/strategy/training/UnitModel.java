@@ -80,12 +80,12 @@ public interface UnitModel extends Serializable {
         }
     }
 
-    /** 직전 봉 수익률을 같은 기준 %로 나눈 클래스를 그대로 예측. 확률은 내지 않는다 */
-    record Persistence(double thresholdPct) implements UnitModel {
+    /** 직전 N봉의 방향(같은 기준으로 나눈 상승·중립·하락)을 그대로 예측. 확률은 내지 않는다 */
+    record Persistence() implements UnitModel {
         @Override
         public void predict(double[][] x, double[] prev, int[] pred, double[][] proba) {
             for (int i = 0; i < x.length; i++) {
-                pred[i] = Double.isNaN(prev[i]) ? TrainingRows.NEUTRAL : TrainingRows.label(prev[i], thresholdPct);
+                pred[i] = Double.isNaN(prev[i]) ? TrainingRows.NEUTRAL : (int) prev[i];
             }
         }
     }

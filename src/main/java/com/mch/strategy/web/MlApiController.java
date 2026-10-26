@@ -40,6 +40,7 @@ public class MlApiController {
     private final TrainingSetQueryService trainingSetQueryService;
     private final ModelRunService runService;
     private final ModelRunQueryService runQueryService;
+    private final com.mch.strategy.training.ModelRunner runner;
 
     // ---------- 학습 데이터 ----------
 
@@ -97,6 +98,19 @@ public class MlApiController {
     @PostMapping("/runs/{id}/test")
     public Map<String, Object> startTest(@PathVariable long id) {
         return runService.startTest(id);
+    }
+
+    /** 저장한 예측으로 거래 성과 계산 (수수료 · 슬리피지 · 확률 기준 · 보유 봉 수를 바꿔 가며) */
+    @PostMapping("/runs/{id}/backtest")
+    public Map<String, Object> backtest(@PathVariable long id, @Valid @RequestBody com.mch.strategy.training.BacktestRequest request) throws java.io.IOException {
+        if (!request.split().equals("val") && !request.split().equals("test")) {
+            throw com.mch.strategy.common.ApiException.badRequest("split 은 val 또는 test 입니다.");
+        }
+        try {
+            return runner.backtest(id, request.split(), request.settings());
+        } catch (IllegalStateException e) {
+            throw com.mch.strategy.common.ApiException.badRequest(e.getMessage());
+        }
     }
 
     /** 예측 기록 CSV 내려받기 */

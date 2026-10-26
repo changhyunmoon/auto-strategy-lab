@@ -1,6 +1,5 @@
 package com.mch.strategy.trainset;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -67,13 +66,7 @@ public class TrainingSetService {
         if (assetIds.size() > 100) {
             throw ApiException.badRequest("종목이 너무 많습니다.");
         }
-        boolean thresholdOk = false;
-        for (double t : TrainingRows.THRESHOLDS) {
-            thresholdOk |= r.thresholdPct().compareTo(BigDecimal.valueOf(t)) == 0;
-        }
-        if (!thresholdOk) {
-            throw ApiException.badRequest("정답 기준은 0.1 · 0.3 · 0.5 · 0.7 · 1.0 % 중에서 고르세요.");
-        }
+        r.labelSpec().validate();
         List<String> groups = java.util.Arrays.stream(FeatureGroup.values()).map(FeatureGroup::getCode)
                 .filter(r.featureGroups()::contains).toList();
         if (ColumnSelection.select(columnRepository.findByDatasetIdOrderByColumnIndexAsc(ds.getId()),

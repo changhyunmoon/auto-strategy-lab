@@ -32,6 +32,13 @@ public final class TrainingData implements AutoCloseable {
     public final long[] time;
     public final float[] forward;
     public final float[] previous;
+    /** 판단 봉 종가 (거래 성과 계산용) */
+    public final float[] close;
+    /** 행마다의 정답 기준 % */
+    public final float[] threshold;
+    /** 정답 예측 기간 N봉 · 판단 간격(분) */
+    public final int horizon;
+    public final int decisionMinutes;
 
     private final FileChannel channel;
     private final long rowBytes;
@@ -47,6 +54,13 @@ public final class TrainingData implements AutoCloseable {
             throw new IllegalStateException("학습 데이터 파일이 없습니다: " + dir);
         }
         Map<String, Object> meta = mapper.readValue(metaFile.toFile(), Map.class);
+        Object format = meta.get("format");
+        if (!(format instanceof Number f) || f.intValue() < TrainingFiles.FORMAT) {
+            throw new IllegalStateException("예전 형식의 학습 데이터입니다. 「같은 설정으로 새로 만들기」로 다시 만들어 주세요.");
+        }
+        Map<String, Object> labelSpec = (Map<String, Object>) meta.get("label");
+        this.horizon = ((Number) labelSpec.get("horizon")).intValue();
+        this.decisionMinutes = ((Number) meta.get("decisionMinutes")).intValue();
         this.rows = ((Number) meta.get("rows")).intValue();
         this.columns = (List<String>) meta.get("columns");
         this.assets = (List<String>) meta.get("assets");
@@ -58,6 +72,8 @@ public final class TrainingData implements AutoCloseable {
         this.time = readLongs(dir.resolve(TrainingFiles.TIME));
         this.forward = readFloats(dir.resolve(TrainingFiles.FORWARD));
         this.previous = readFloats(dir.resolve(TrainingFiles.PREVIOUS));
+        this.close = readFloats(dir.resolve(TrainingFiles.CLOSE));
+        this.threshold = readFloats(dir.resolve(TrainingFiles.THRESHOLD));
         if (label.length != rows || time.length != rows || forward.length != rows) {
             throw new IllegalStateException("학습 데이터 파일의 행 수가 맞지 않습니다. 학습 데이터를 다시 만들어 주세요.");
         }

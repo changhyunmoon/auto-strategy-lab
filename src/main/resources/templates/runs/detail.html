@@ -43,13 +43,18 @@
     <div class="prop"><div class="prop-label"><span class="prop-icon">🏷️</span>학습 데이터</div>
       <div class="prop-value">
         <a class="link" th:href="@{/trainsets/{id}(id=${r.summary.trainingSetId})}" th:text="${r.summary.trainingSetName}">학습 데이터</a>
-        <span class="muted small" th:text="${#strings.listJoin(r.assets, '·') + ' · ' + r.interval + ' · 정답 ±' + r.thresholdPct + '%'}"></span>
+        <span class="muted small" th:text="${#strings.listJoin(r.assets, '·') + ' · ' + r.interval}"></span>
+        <div class="hint" th:text="${'정답: ' + r.labelText}">정답</div>
       </div>
     </div>
     <div class="prop"><div class="prop-label"><span class="prop-icon">📅</span>구간 (UTC)</div>
       <div class="prop-value small num">
         <span th:text="${'학습 ' + r.trainPeriod}"></span> · <span th:text="${'검증 ' + r.valPeriod}"></span> · <span th:text="${'테스트 ' + r.testPeriod}"></span>
       </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🔁</span><span data-term="validation">검증 방식</span></div>
+      <div class="prop-value"><span class="tag tag-blue" th:text="${r.validationText}">한 번 나누기</span>
+        <span class="muted small" th:text="${r.validationDescription}"></span></div>
     </div>
     <div class="prop"><div class="prop-label"><span class="prop-icon">🧩</span>학습 방법</div>
       <div class="prop-value">
@@ -79,10 +84,12 @@
       <div class="tab active" data-tab="val">📙 검증 결과</div>
       <div class="tab" data-tab="test">📕 최종 테스트</div>
       <div class="tab" data-tab="importance">🔀 변수 중요도</div>
+      <div class="tab" data-tab="trade">💰 거래 성과</div>
       <div class="tab" data-tab="info">📋 학습 정보</div>
     </div>
 
     <div class="tab-panel active" data-panel="val">
+      <div id="valExtra"></div>
       <div id="valResult"><div class="empty">결과를 불러오는 중…</div></div>
     </div>
 
@@ -112,6 +119,59 @@
       <div id="importanceBox"></div>
     </div>
 
+    <div class="tab-panel" data-panel="trade" id="tradePanel" th:data-horizon="${r.horizon}" th:data-proba="${r.probability}">
+      <div class="callout callout-yellow" style="margin-bottom:14px">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body small">
+          예측을 매매 규칙으로 바꿔 계산한 <span data-term="backtest">과거 거래 성과</span>입니다. 판단 봉 종가에 바로 체결된다고 가정하고 매번 수수료 + 슬리피지를 뺍니다.
+          <b>숏은 참고용</b>입니다 (업비트 원화 현물은 공매도 불가). 규칙 · 기준을 이 화면에서 여러 번 바꿔 고를수록 검증 구간에 맞춘 운이 섞입니다.
+        </div>
+      </div>
+      <div class="props">
+        <div class="prop"><div class="prop-label"><span class="prop-icon">📅</span>구간</div>
+          <div class="prop-value chip-group">
+            <label class="chip"><input type="radio" name="btSplit" value="val" checked>검증 (폴드 밖 예측 포함)</label>
+            <label class="chip" id="btTestChip"><input type="radio" name="btSplit" value="test">최종 테스트</label>
+          </div>
+        </div>
+        <div class="prop"><div class="prop-label"><span class="prop-icon">💸</span>비용 (한쪽)</div>
+          <div class="prop-value">
+            <span class="small muted" data-term="fee">수수료</span>
+            <input type="number" class="form-control" id="btFee" value="0.05" step="0.01" min="0" max="1" style="width:90px"><span class="small muted">%</span>
+            <span class="small muted" style="margin-left:8px" data-term="slippage">슬리피지</span>
+            <input type="number" class="form-control" id="btSlip" value="0.02" step="0.01" min="0" max="1" style="width:90px"><span class="small muted">%</span>
+            <div class="hint">업비트 원화 마켓 기본 수수료는 한쪽 0.05% 입니다. 한 번 사고 팔면 (수수료 + 슬리피지) × 2 가 빠집니다.</div>
+          </div>
+        </div>
+        <div class="prop"><div class="prop-label"><span class="prop-icon">🚦</span>진입 규칙</div>
+          <div class="prop-value">
+            <span class="chip-group">
+              <label class="chip"><input type="radio" name="btRule" value="class" checked>예측 클래스대로</label>
+              <label class="chip" id="btProbaChip"><input type="radio" name="btRule" value="proba"><span data-term="probThreshold">확률 기준</span></label>
+            </span>
+            <span class="bt-proba" style="display:none">
+              <span class="small muted" style="margin-left:8px">상승 확률 ≥</span>
+              <input type="number" class="form-control" id="btUp" value="0.5" step="0.05" min="0" max="1" style="width:80px">
+              <span class="small muted">하락 확률 ≥</span>
+              <input type="number" class="form-control" id="btDown" value="0.5" step="0.05" min="0" max="1" style="width:80px">
+            </span>
+            <div class="hint">상승 신호 → 롱, 하락 신호 → 숏, 중립 → 신호 없음.</div>
+          </div>
+        </div>
+        <div class="prop"><div class="prop-label"><span class="prop-icon">⏳</span><span data-term="holdBars">보유 봉 수</span></div>
+          <div class="prop-value">
+            <input type="number" class="form-control" id="btHold" min="1" max="1440" style="width:90px">
+            <label class="small" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-left:10px">
+              <input type="checkbox" class="form-check-input" style="margin:0" id="btExtend" checked><span data-term="extendOnSignal">같은 신호면 보유 연장</span>
+            </label>
+            <div class="hint">기본은 정답의 예측 기간과 같습니다. 보유 중 <span data-term="flip">반대 신호</span>가 나오면 청산하고 반대로 들어갑니다.</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin:12px 0 4px"><button class="btn btn-primary btn-sm" id="btRun">계산</button></div>
+      <div id="btResult"></div>
+    </div>
+
     <div class="tab-panel" data-panel="info">
       <div id="infoBox"></div>
       <div style="margin-top:18px;display:flex;gap:8px">
@@ -127,6 +187,7 @@
   <script th:src="@{/js/echarts-theme.js}"></script>
   <script th:src="@{/js/run-result.js}"></script>
   <script th:src="@{/js/run-detail.js}"></script>
+  <script th:src="@{/js/run-trade.js}"></script>
 </th:block>
 </body>
 </html>

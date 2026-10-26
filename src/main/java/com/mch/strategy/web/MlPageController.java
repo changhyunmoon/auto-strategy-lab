@@ -15,7 +15,6 @@ import com.mch.strategy.dataset.DatasetQueryService;
 import com.mch.strategy.dataset.DatasetViews;
 import com.mch.strategy.feature.FeatureGroup;
 import com.mch.strategy.training.ModelRunQueryService;
-import com.mch.strategy.trainset.TrainingRows;
 import com.mch.strategy.trainset.TrainingSetQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -45,7 +44,7 @@ public class MlPageController {
         model.addAttribute("datasets", datasets);
         model.addAttribute("groups", Arrays.stream(FeatureGroup.values())
                 .map(g -> Map.of("code", g.getCode(), "label", g.getCode() + ". " + g.getLabel())).toList());
-        model.addAttribute("thresholds", Arrays.stream(TrainingRows.THRESHOLDS).boxed().toList());
+        model.addAttribute("labelOptions", labelOptions());
         model.addAttribute("copy", copy == null ? null : trainingSetQueryService.detail(copy).copy());
         model.addAttribute("datasetId", datasetId);
         return "trainsets/new";
@@ -68,6 +67,7 @@ public class MlPageController {
         model.addAttribute("trainUnits", runQueryService.trainUnits());
         model.addAttribute("balances", runQueryService.balances());
         model.addAttribute("earlyStoppings", runQueryService.earlyStoppings());
+        model.addAttribute("validations", runQueryService.validations());
         Map<String, Object> copied = copy == null ? null : runQueryService.detail(copy).copy();
         model.addAttribute("copy", copied);
         model.addAttribute("selectedSetId", copied != null ? copied.get("trainingSetId") : trainingSetId);
@@ -87,6 +87,19 @@ public class MlPageController {
         model.addAttribute("menu", "runs");
         model.addAttribute("r", runQueryService.detail(id));
         return "runs/detail";
+    }
+
+    /** 정답 정의 선택지 (화면 칩) */
+    private static Map<String, Object> labelOptions() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("horizons", com.mch.strategy.trainset.LabelSpec.HORIZONS);
+        m.put("fixed", com.mch.strategy.trainset.LabelSpec.FIXED_THRESHOLDS);
+        m.put("volKs", com.mch.strategy.trainset.LabelSpec.VOL_KS);
+        m.put("volWindows", com.mch.strategy.trainset.LabelSpec.VOL_WINDOWS);
+        m.put("margins", com.mch.strategy.trainset.LabelSpec.MARGINS);
+        m.put("defaultFeePct", com.mch.strategy.training.Backtester.DEFAULT_FEE_PCT);
+        m.put("defaultSlippagePct", com.mch.strategy.training.Backtester.DEFAULT_SLIPPAGE_PCT);
+        return m;
     }
 
     /** 학습 데이터 만들기 화면이 데이터세트를 고를 때 쓰는 정보 */

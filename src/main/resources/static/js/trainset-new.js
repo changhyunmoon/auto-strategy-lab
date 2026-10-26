@@ -114,13 +114,59 @@ $(function () {
     if (nameTouched) return;
     var assets = $('input[name="asset"]:checked').map(function () { return $(this).parent().text(); }).get().join('·');
     var iv = $('input[name="interval"]:checked').val() || '';
-    var th = $('input[name="threshold"]:checked').val();
-    $('#setName').val(assets + ' ' + ivLabel(iv) + ' ±' + th + '% · 학습 ' + $('#trainFrom').val() + '~');
+    if (!$('input[name="labelMethod"]:checked').length) return;
+    var s = labelSpec();
+    var method = s.labelMethod === 'TRIPLE_BARRIER' ? '목표·손절 ' : '';
+    $('#setName').val(assets + ' ' + ivLabel(iv) + ' · ' + method + s.horizon + '봉 ' + thresholdText(s) + ' · 학습 ' + $('#trainFrom').val() + '~');
   }
 
+  // ---------- 정답 정의 ----------
+  function radio(name) { return $('input[name="' + name + '"]:checked').val(); }
+  function fmtNum(v) { return String(Number(Number(v).toFixed(3))); }
+
+  function labelSpec() {
+    return {
+      labelMethod: radio('labelMethod'),
+      horizon: Number(radio('horizon')),
+      thresholdMode: radio('thresholdMode'),
+      thresholdPct: Number(radio('thresholdPct')),
+      volK: Number(radio('volK')),
+      volWindow: Number(radio('volWindow')),
+      feePct: Number($('#feePct').val()),
+      slippagePct: Number($('#slippagePct').val()),
+      marginPct: Number(radio('marginPct'))
+    };
+  }
+
+  function thresholdText(s) {
+    if (s.thresholdMode === 'FIXED') return '±' + fmtNum(s.thresholdPct) + '%';
+    if (s.thresholdMode === 'VOLATILITY') return '±(최근 ' + s.volWindow + '봉 변동성 × ' + fmtNum(s.volK) + ' × √' + s.horizon + ')';
+    return '±' + fmtNum((s.feePct + s.slippagePct) * 2 + s.marginPct) + '%';
+  }
+
+  function updateLabel() {
+    var s = labelSpec();
+    var iv = $('input[name="interval"]:checked').val() || '1m';
+    var minutes = ivMin(iv) * s.horizon;
+    var span = minutes >= 60 ? (minutes % 60 ? (minutes / 60).toFixed(1) : minutes / 60) + '시간' : minutes + '분';
+    $('.horizon-time').each(function () {
+      var m = ivMin(iv) * Number($(this).data('bars'));
+      $(this).text(m >= 60 ? (m % 60 ? (m / 60).toFixed(1) : m / 60) + '시간' : m + '분');
+    });
+    $('.mode-panel').each(function () { $(this).toggle($(this).data('mode') === s.thresholdMode); });
+    var thr = thresholdText(s);
+    var text = s.labelMethod === 'TRIPLE_BARRIER'
+      ? '판단 후 ' + s.horizon + '봉(' + span + ') 안에 현재 종가 대비 +' + thr.replace('±', '') + '(목표가)에 먼저 닿으면 상승, −' + thr.replace('±', '') + '(손절가)에 먼저 닿으면 하락, 둘 다 아니면 중립.'
+      : '판단 봉 종가 → ' + s.horizon + '봉(' + span + ') 뒤 종가 수익률이 +기준 이상이면 상승, −기준 이하면 하락, 그 사이는 중립. 기준 ' + thr + '.';
+    $('#labelPreview').text(text + (s.thresholdMode === 'COST' ? ' (왕복 비용을 넘는 움직임만 상승 · 하락)' : ''));
+    suggestName();
+  }
+  $(document).on('change', 'input[name="labelMethod"], input[name="horizon"], input[name="thresholdMode"], input[name="thresholdPct"], input[name="volK"], input[name="volWindow"], input[name="marginPct"]', updateLabel);
+  $('#feePct, #slippagePct').on('input', updateLabel);
+
   $('#datasetSel').on('change', function () { selectDataset(false); });
-  $(document).on('change', 'input[name="interval"]', function () { renderExtras(); suggestName(); });
-  $(document).on('change', 'input[name="asset"], input[name="threshold"]', suggestName);
+  $(document).on('change', 'input[name="interval"]', function () { renderExtras(); updateLabel(); });
+  $(document).on('change', 'input[name="asset"]', suggestName);
   $(document).on('change', 'input[name="preset"]', function () { preset(this.value); });
   $('.period').on('change', function () { $('input[name="preset"]').prop('checked', false); refresh(); });
   $('#setName').on('input', function () { nameTouched = true; });
@@ -134,7 +180,9 @@ $(function () {
       assetIds: $('input[name="asset"]:checked').map(function () { return Number(this.value); }).get(),
       featureGroups: $('input[name="group"]:checked').map(function () { return this.value; }).get(),
       includeBarColumns: $('#includeBar').is(':checked'),
-      thresholdPct: Number($('input[name="threshold"]:checked').val()),
+      labelMethod: labelSpec().labelMethod, horizon: labelSpec().horizon, thresholdMode: labelSpec().thresholdMode,
+      thresholdPct: labelSpec().thresholdPct, volK: labelSpec().volK, volWindow: labelSpec().volWindow,
+      feePct: labelSpec().feePct, slippagePct: labelSpec().slippagePct, marginPct: labelSpec().marginPct,
       trainFrom: $('#trainFrom').val(), trainTo: $('#trainTo').val(),
       valFrom: $('#valFrom').val(), valTo: $('#valTo').val(),
       testFrom: $('#testFrom').val(), testTo: $('#testTo').val()
@@ -172,10 +220,18 @@ $(function () {
     $('input[name="extra"]').each(function () { this.checked = COPY.extraIntervals.indexOf(this.value) >= 0; });
     $('input[name="group"]').each(function () { this.checked = COPY.featureGroups.indexOf(this.value) >= 0; });
     $('#includeBar').prop('checked', COPY.includeBarColumns);
-    $('input[name="threshold"]').each(function () { this.checked = Number(this.value) === Number(COPY.thresholdPct); });
+    var L = COPY.label || {};
+    ['labelMethod', 'horizon', 'thresholdMode', 'thresholdPct', 'volK', 'volWindow', 'marginPct'].forEach(function (k) {
+      if (L[k] == null) return;
+      $('input[name="' + k + '"]').each(function () { this.checked = String(this.value) === String(L[k]) || Number(this.value) === Number(L[k]); });
+    });
+    if (L.feePct != null) $('#feePct').val(L.feePct);
+    if (L.slippagePct != null) $('#slippagePct').val(L.slippagePct);
+    updateLabel();
     ['trainFrom', 'trainTo', 'valFrom', 'valTo', 'testFrom', 'testTo'].forEach(function (k) { $('#' + k).val(COPY[k]); });
     refresh();
   } else {
     selectDataset(false);
   }
+  updateLabel();
 });

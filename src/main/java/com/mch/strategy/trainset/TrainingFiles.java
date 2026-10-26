@@ -16,10 +16,16 @@ public final class TrainingFiles {
     public static final String ASSET = "asset.i8";
     /** 판단 봉 시작 시각 int64 (epoch ms, UTC) */
     public static final String TIME = "time.i64";
-    /** 다음 봉 종가 수익률 float32 (%) */
+    /** 예측 기간(N봉) 뒤 종가 수익률 float32 (%) */
     public static final String FORWARD = "forward.f32";
-    /** 직전 봉 대비 현재 종가 수익률 float32 (%) — 「직전 봉 방향 유지」 기준 모델용. 입력 열이 아니다 */
+    /** 직전 N봉 수익률을 같은 기준으로 나눈 방향 float32 (0·1·2, 없으면 NaN) — 「직전 봉 방향 유지」 기준 모델용. 입력 열이 아니다 */
     public static final String PREVIOUS = "previous.f32";
+    /** 판단 봉 종가 float32 — 거래 성과(백테스트) 계산용. 입력 열이 아니다 */
+    public static final String CLOSE = "close.f32";
+    /** 이 행의 정답 기준 float32 (%) — 변동성 기준이면 행마다 다르다 */
+    public static final String THRESHOLD = "threshold.f32";
+    /** 파일 형식 버전. 2 = N봉 정답 · 종가 · 기준 파일 추가 */
+    public static final int FORMAT = 2;
     /** 열 이름 · 자산 · 정답 설정 · 구간 날짜 */
     public static final String META = "meta.json";
 

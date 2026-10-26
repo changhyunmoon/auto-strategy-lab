@@ -19,7 +19,7 @@ $(function () {
       t.assets.forEach(function (a) { $assets.append($('<span class="tag"></span>').text(a)).append(' '); });
       $tr.append($assets);
       $tr.append($('<td></td>').text(t.interval + (t.extraIntervals.length ? ' (+' + t.extraIntervals.join('·') + ')' : '')));
-      $tr.append($('<td class="num"></td>').text('±' + t.thresholdPct + '%'));
+      $tr.append($('<td class="small" style="max-width:260px"></td>').text(t.labelText));
       $tr.append($('<td class="num small"></td>').html(
         $('<div></div>').text('학 ' + t.trainPeriod).prop('outerHTML') +
         $('<div></div>').text('검 ' + t.valPeriod).prop('outerHTML') +

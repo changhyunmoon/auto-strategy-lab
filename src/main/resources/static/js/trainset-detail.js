@@ -26,11 +26,16 @@ $(function () {
   if (!STATS || !STATS.splits) return;
   var splits = STATS.splits;
   var PERIODS = { train: $page.data('train'), val: $page.data('val'), test: $page.data('test') };
-  // Java 는 1.0 을 "1.0", JS 는 "1" 로 쓰므로 키는 숫자로 비교해서 찾는다
-  function key(map, t) {
-    return Object.keys(map).filter(function (k) { return Number(k) === Number(t); })[0];
+  if (!STATS.alternatives) {
+    $('#distChart').html('<div class="empty">예전 형식의 학습 데이터입니다. 「같은 설정으로 새로 만들기」로 다시 만들어 주세요.</div>');
+    return;
   }
-  var selected = STATS.selectedThreshold;
+  var selected = STATS.selected;
+  var tr0 = splits.train, va0 = splits.val;
+  var hint = [];
+  if (tr0.meanThresholdPct != null) hint.push('학습 구간 평균 기준 ±' + App.fixed(tr0.meanThresholdPct, 3) + '% · 검증 ±' + App.fixed(va0.meanThresholdPct, 3) + '%');
+  if (tr0.ambiguous || va0.ambiguous) hint.push('목표 · 손절 동시 도달(중립 처리) 학습 ' + App.formatNumber(tr0.ambiguous) + '건 · 검증 ' + App.formatNumber(va0.ambiguous) + '건');
+  $('#labelStatsHint').text(hint.join(' · '));
 
   // ---------- 구간 ----------
   var total = SPLITS.reduce(function (s, p) { return s + (splits[p[0]].rows || 0); }, 0);
@@ -62,7 +67,7 @@ $(function () {
   var chart = echarts.init(document.getElementById('distChart'), 'clean');
   function drawDist() {
     var a = $('input[name="distAsset"]:checked').val();
-    var rows = ['train', 'val'].map(function (k) { var m = splits[k].classes[a]; return m[key(m, selected)]; });
+    var rows = ['train', 'val'].map(function (k) { return splits[k].classes[a][selected]; });
     var labels = ['하락', '중립', '상승'];
     chart.setOption({
       grid: { left: 70, right: 30, top: 40, bottom: 30 },
@@ -92,15 +97,15 @@ $(function () {
 
   // ---------- 다른 기준 % 표 ----------
   var $th = $('#thresholdTable');
-  $th.append('<thead><tr><th>정답 기준</th><th class="num">학습 상승</th><th class="num">학습 중립</th><th class="num">학습 하락</th>' +
+  $th.append('<thead><tr><th>기준</th><th class="num">학습 상승</th><th class="num">학습 중립</th><th class="num">학습 하락</th>' +
     '<th class="num">검증 상승</th><th class="num">검증 중립</th><th class="num">검증 하락</th><th class="num">검증 상승·하락 건수</th></tr></thead>');
   var $body = $('<tbody></tbody>').appendTo($th);
-  STATS.thresholds.forEach(function (t) {
-    var tr = splits.train.classes.ALL[key(splits.train.classes.ALL, t)], va = splits.val.classes.ALL[key(splits.val.classes.ALL, t)];
-    var isSel = Number(t) === Number(selected);
+  STATS.alternatives.forEach(function (t) {
+    var tr = splits.train.classes.ALL[t], va = splits.val.classes.ALL[t];
+    var isSel = t === selected;
     var st = tr[0] + tr[1] + tr[2], sv = va[0] + va[1] + va[2];
     var $tr = $('<tr></tr>').toggleClass('fw-semibold', isSel);
-    $tr.append($('<td></td>').text('±' + t + '%' + (isSel ? '  ← 선택' : '')));
+    $tr.append($('<td></td>').text(t + (isSel ? '  ← 선택' : '')));
     [tr[2], tr[1], tr[0]].forEach(function (v) { $tr.append($('<td class="num"></td>').text(App.pct(v / st))); });
     [va[2], va[1], va[0]].forEach(function (v) { $tr.append($('<td class="num"></td>').text(App.pct(v / sv))); });
     $tr.append($('<td class="num"></td>').text(App.formatNumber(va[0] + va[2])));
@@ -110,8 +115,9 @@ $(function () {
   // ---------- 제외 사유 ----------
   var REASONS = {
     outside: ['구간 밖', '학습 · 검증 · 테스트 어느 날짜에도 속하지 않음 (구간 사이 빈 날 포함)'],
-    noNextBar: ['다음 봉 없음', '데이터 끝이거나, 바로 다음 봉이 빈 구간이라 정답을 만들 수 없음'],
-    crossesBoundary: ['구간 경계 넘음', '다음 봉이 다음 구간에 속해 정보가 새어 들 수 있음'],
+    noNextBar: ['예측 기간 봉 없음', '데이터 끝이거나, 예측 기간(N봉) 안에 빈 봉이 있어 정답을 만들 수 없음'],
+    crossesBoundary: ['구간 경계 넘음', '정답에 쓰는 N봉이 다음 구간에 걸쳐 정보가 새어 들 수 있음'],
+    noVolatility: ['변동성 계산 불가', '변동성 기준인데 과거 봉이 부족함 (데이터 앞부분)'],
     missingPrice: ['가격 없음', '종가가 비어 있음']
   };
   var $ex = $('#excludedTable tbody');

@@ -30,10 +30,91 @@ $(function () {
   App.api('GET', '/api/runs/' + id + '/result?split=val').done(function (res) {
     if (res.empty) { $('#valResult').html('<div class="empty">결과 파일이 없습니다.</div>'); return; }
     valResult = res;
+    renderValExtra(res);
     ResultView.render($('#valResult'), res, { split: 'val' });
     renderImportance(res.importance);
     renderInfo(res);
   });
+
+  // ---------- 검증: 기본 규칙 거래 성과 + 워크포워드 폴드 ----------
+  var foldChart = null;
+  function signedPct(v, d) { return v == null ? '–' : (v >= 0 ? '+' : '') + Number(v).toFixed(d == null ? 2 : d) + '%'; }
+
+  function tradeLine(bt, label) {
+    if (!bt || !bt.total) return null;
+    var t = bt.total;
+    var $c = $('<div class="callout" style="margin-bottom:10px"><div class="callout-icon">💰</div><div class="callout-body small"></div></div>');
+    $c.find('.callout-body').append($('<b></b>').append($('<span data-term="backtest"></span>').text(label)))
+      .append(document.createTextNode(' 순수익 ' + signedPct(t.netReturnPct) + ' (비용 전 ' + signedPct(t.grossReturnPct) + ', 단순 보유 ' + signedPct(t.buyHoldPct) +
+        ') · 최대 낙폭 ' + Number(t.maxDrawdownPct).toFixed(2) + '% · 거래 ' + App.formatNumber(t.trades) + '번 · 승률 ' + App.pct(t.winRate)))
+      .append($('<div class="faint"></div>').text('기본 규칙: 예측 클래스대로 롱 · 숏, 예측 기간만큼 보유, 수수료 ' + bt.settings.feePct + '% + 슬리피지 ' +
+        bt.settings.slippagePct + '% (한쪽). 다른 규칙 · 비용은 「💰 거래 성과」 탭에서 계산합니다.'));
+    return $c;
+  }
+
+  function renderValExtra(res) {
+    var $box = $('#valExtra').empty();
+    var v = res.validation || {};
+    if (v.label) {
+      $box.append($('<div class="small muted" style="margin-bottom:8px"></div>').text('검증 방식: ' + v.label +
+        (v.folds > 1 ? ' · 폴드 ' + v.folds + ' · purge ' + v.purgeBars + '봉' : '') + ' — ' + v.finalModel));
+    }
+    var line = tradeLine(res.backtest, '검증 구간 거래 성과 (기본 규칙)');
+    if (line) $box.append(line);
+    if (!res.folds) return;
+
+    var $s = $('<div class="result-section" style="margin-top:12px"></div>').appendTo($box);
+    $s.append($('<h3></h3>').append('<span data-term="walkForward">폴드별 성능</span>')
+      .append($('<span class="count"></span>').text('폴드마다 앞쪽으로 학습 → 다음 블록 검증')));
+    var el = $('<div class="chart chart--sm"></div>').appendTo($s)[0];
+    foldChart = echarts.init(el, 'clean');
+    var f = res.folds;
+    foldChart.setOption({
+      grid: { left: 50, right: 60, top: 36, bottom: 30 }, legend: { top: 0 },
+      tooltip: { trigger: 'axis', formatter: function (ps) {
+        var x = f[ps[0].dataIndex];
+        return '폴드 ' + x.fold + ' · 검증 ' + App.toKst(x.valFrom) + ' ~ ' + App.toKst(x.valTo) + '<br>' +
+          ps.map(function (p) { return p.marker + p.seriesName + ' ' + (p.seriesName.indexOf('%') >= 0 ? Number(p.value).toFixed(2) : Number(p.value).toFixed(3)); }).join('<br>');
+      } },
+      xAxis: { type: 'category', data: f.map(function (x) { return '폴드 ' + x.fold; }) },
+      yAxis: [{ type: 'value', name: '점수', min: 0, max: 1 }, { type: 'value', name: '순수익 %', splitLine: { show: false } }],
+      series: [
+        { name: 'Macro F1', type: 'line', data: f.map(function (x) { return x.macroF1; }), symbolSize: 7 },
+        { name: '균형 정확도', type: 'line', data: f.map(function (x) { return x.balancedAccuracy; }), symbolSize: 5 },
+        { name: '최빈 클래스 F1', type: 'line', data: f.map(function (x) { return x.baselineMacroF1; }), lineStyle: { type: 'dashed' }, symbolSize: 4, itemStyle: { color: '#787774' } },
+        { name: '순수익 %', type: 'bar', yAxisIndex: 1, barMaxWidth: 26, data: f.map(function (x) { return { value: x.netReturnPct, itemStyle: { color: x.netReturnPct >= 0 ? 'rgba(224,62,62,.35)' : 'rgba(35,131,226,.35)' } }; }) }
+      ]
+    });
+    var $t = $('<table class="db-table db-table--compact"><thead><tr><th><span data-term="fold">폴드</span></th><th>학습 (KST)</th><th>검증 (KST)</th><th class="num">학습 행</th><th class="num">검증 행</th>' +
+      '<th class="num"><span data-term="macroF1">Macro F1</span></th><th class="num"><span data-term="baseline">최빈 F1</span></th><th class="num"><span data-term="balancedAccuracy">균형 정확도</span></th>' +
+      '<th class="num"><span data-term="netReturn">순수익</span></th><th class="num"><span data-term="mdd">최대 낙폭</span></th><th class="num">거래</th></tr></thead><tbody></tbody></table>');
+    f.forEach(function (x) {
+      var better = x.macroF1 != null && x.baselineMacroF1 != null && x.macroF1 > x.baselineMacroF1;
+      $t.find('tbody').append($('<tr></tr>').append($('<td></td>').text(x.fold))
+        .append($('<td class="num small"></td>').text(App.toKst(x.trainFrom).slice(0, 10) + ' ~ ' + App.toKst(x.trainTo).slice(0, 16)))
+        .append($('<td class="num small"></td>').text(App.toKst(x.valFrom).slice(0, 16) + ' ~ ' + App.toKst(x.valTo).slice(0, 16)))
+        .append($('<td class="num"></td>').text(App.formatNumber(x.trainRows))).append($('<td class="num"></td>').text(App.formatNumber(x.valRows)))
+        .append($('<td class="num"></td>').text(App.fixed(x.macroF1)).addClass(better ? 'diff-up' : 'diff-down'))
+        .append($('<td class="num muted"></td>').text(App.fixed(x.baselineMacroF1)))
+        .append($('<td class="num"></td>').text(App.pct(x.balancedAccuracy)))
+        .append($('<td class="num"></td>').text(signedPct(x.netReturnPct)))
+        .append($('<td class="num"></td>').text(Number(x.maxDrawdownPct).toFixed(2) + '%'))
+        .append($('<td class="num"></td>').text(App.formatNumber(x.trades))));
+    });
+    $('<div class="db-table-wrap" style="margin-top:8px"></div>').append($t).appendTo($s);
+    var f1s = f.map(function (x) { return x.macroF1 || 0; });
+    var mean = f1s.reduce(function (a, b) { return a + b; }, 0) / f1s.length;
+    var sd = Math.sqrt(f1s.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / f1s.length);
+    var wins = f.filter(function (x) { return x.macroF1 != null && x.baselineMacroF1 != null && x.macroF1 > x.baselineMacroF1; }).length;
+    var profit = f.filter(function (x) { return x.netReturnPct > 0; }).length;
+    $s.append($('<div class="small" style="margin-top:6px"></div>').append('<span data-term="foldStability">안정성</span>')
+      .append(document.createTextNode(': Macro F1 평균 ' + mean.toFixed(3) + ' ± ' + sd.toFixed(3) + ' · 최저 ' + Math.min.apply(null, f1s).toFixed(3) +
+        ' · 최빈 클래스보다 나은 폴드 ' + wins + '/' + f.length + ' · 순수익 플러스 폴드 ' + profit + '/' + f.length)));
+    $s.append($('<details class="help"><summary>ⓘ 읽는 법</summary><div class="help-body"></div></details>').find('.help-body')
+      .html('<p>폴드마다 그 시점까지의 데이터로만 학습하고 바로 다음 블록을 예측했습니다. 실제 운영과 같은 순서입니다.</p>' +
+        '<p>점수가 폴드마다 크게 오르내리거나, 일부 폴드에서 최빈 클래스(점선)보다 낮다면 특정 시기에만 통하는 모델일 수 있습니다.</p>' +
+        '<p>아래 「검증 결과」의 차트 · 표는 모든 폴드의 검증 블록 예측(폴드 밖 예측)을 이어 붙여 그린 것입니다.</p>').end());
+  }
 
   // ---------- 최종 테스트 ----------
   var testCount = Number($page.data('test-count')) || 0;
@@ -48,6 +129,8 @@ $(function () {
       if (res.empty) return;
       $('#testCsv').show();
       ResultView.render($('#testResult'), res, { split: 'test' });
+      var line = tradeLine(res.backtest, '최종 테스트 거래 성과 (기본 규칙)');
+      if (line) $('#testResult').prepend(line);
       if (valResult) appendCompare(res);
     });
   }
@@ -74,7 +157,7 @@ $(function () {
       if (job.status === 'RUNNING') { setTimeout(function () { pollTest(jobId); }, 1500); return; }
       $('#testProgress').hide();
       $('#testBtn').prop('disabled', false);
-      if (job.status === 'SUCCEEDED') { testCount++; testIntro(); loadTest(); App.toast('최종 테스트를 마쳤습니다.'); }
+      if (job.status === 'SUCCEEDED') { testCount++; testIntro(); loadTest(); $(document).trigger('test:done'); App.toast('최종 테스트를 마쳤습니다.'); }
       else App.toast('최종 테스트 실패: ' + (job.message || ''), 'red');
     });
   }
@@ -94,7 +177,7 @@ $(function () {
   if (testStatus === 'RUNNING' && $page.data('test-job')) { $('#testBtn').prop('disabled', true); pollTest($page.data('test-job')); }
 
   $(document).on('tab:shown', function (e, name) {
-    if (name === 'val') ResultView.resizeAll($('#valResult'));
+    if (name === 'val') { ResultView.resizeAll($('#valResult')); if (foldChart) foldChart.resize(); }
     if (name === 'test') ResultView.resizeAll($('#testResult'));
     if (name === 'importance') impCharts.forEach(function (c) { c.resize(); });
   });
@@ -106,7 +189,8 @@ $(function () {
     if (!imp) { $box.html('<div class="empty">중요도 정보가 없습니다.</div>'); return; }
     function bars(title, sub, list, withStd, helpLines) {
       var $s = $('<div class="result-section"></div>').appendTo($box);
-      $s.append($('<h3></h3>').text(title).append($('<span class="count"></span>').text(sub)));
+      $s.append($('<h3></h3>').append($('<span></span>').attr('data-term', title === '순열 중요도' ? 'permutation' : 'nativeImportance').text(title))
+        .append($('<span class="count"></span>').text(sub)));
       if (!list) { $s.append($('<div class="small faint"></div>').text('계산하지 않았습니다.')); return; }
       var top = list.slice(0, 30).reverse();
       var el = $('<div class="chart"></div>').css('height', Math.max(240, 40 + top.length * 22) + 'px').appendTo($s)[0];
@@ -139,7 +223,7 @@ $(function () {
     var $box = $('#infoBox').empty();
     var tr = res.train || {}, va = res.byAsset.ALL.summary;
     var $s = $('<div class="result-section"></div>').appendTo($box);
-    $s.append('<h3>학습 vs 검증 <span class="count">학습 점수는 학습에 쓴 표본(최대 10만 행)을 다시 평가한 값</span></h3>');
+    $s.append('<h3><span data-term="overfitGap">학습 vs 검증</span> <span class="count">학습 점수는 최종 모델이 학습에 쓴 표본(최대 10만 행)을 다시 평가한 값</span></h3>');
     var $t = $('<table class="db-table"><thead><tr><th>지표</th><th class="num">학습 (재평가)</th><th class="num">검증</th><th class="num">차이</th></tr></thead><tbody></tbody></table>');
     [['Macro F1', 'macroF1', 3], ['균형 정확도', 'balancedAccuracy', 'pct'], ['정확도', 'accuracy', 'pct'], ['Log loss', 'logLoss', 3]].forEach(function (m) {
       var a = tr[m[1]], b = va[m[1]], fmt = m[2] === 'pct' ? App.pct : function (x) { return App.fixed(x, 3); };

@@ -39,6 +39,13 @@ public class ModelRunService {
         if (r.models().size() > 30) {
             throw ApiException.badRequest("한 번에 30개까지 실행할 수 있습니다.");
         }
+        RunOptions.Validation validation = r.validationOrDefault();
+        int folds = r.folds() == null ? 4 : r.folds();
+        double fraction = r.firstTrainFraction() == null ? 0.5 : r.firstTrainFraction();
+        Integer rolling = r.rollingDays() == null ? 30 : r.rollingDays();
+        if (validation.isWalkForward() && (fraction < 0.2 || fraction > 0.9)) {
+            throw ApiException.badRequest("첫 학습 비율은 0.2 ~ 0.9 사이여야 합니다.");
+        }
         List<ModelRun> runs = new ArrayList<>();
         boolean many = r.models().size() > 1;
         for (CreateRunsRequest.ModelChoice m : r.models()) {
@@ -49,7 +56,7 @@ public class ModelRunService {
             }
             String name = many ? r.name().trim() + " · " + m.type().getLabel() : r.name().trim();
             runs.add(ModelRun.create(name, ts.getId(), m.type(), params, r.trainUnit(), balance, r.earlyStopping(),
-                    r.seed(), r.maxTrainRows(), r.permutationImportance(), blankToNull(r.memo())));
+                    validation, folds, fraction, rolling, r.seed(), r.maxTrainRows(), r.permutationImportance(), blankToNull(r.memo())));
         }
         List<long[]> ids = tx.execute(status -> {
             List<long[]> out = new ArrayList<>();

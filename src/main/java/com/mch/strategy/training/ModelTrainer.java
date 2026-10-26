@@ -33,7 +33,7 @@ final class ModelTrainer {
      */
     static UnitModel train(ModelType type, Map<String, Object> params, double[][] x, int[] y,
                            double[][] stopX, int[] stopY, RunOptions.Balance balance, int seed,
-                           double thresholdPct, Preprocessor pre, BiConsumer<Integer, String> progress,
+                           Preprocessor pre, BiConsumer<Integer, String> progress,
                            StringBuilder notes) {
         double[] prior = prior(y);
         long distinct = java.util.Arrays.stream(y).distinct().count();
@@ -44,7 +44,7 @@ final class ModelTrainer {
         return switch (type) {
             case BASELINE_MAJORITY -> new UnitModel.Constant(UnitModel.argmax(prior), prior);
             case BASELINE_STRATIFIED -> new UnitModel.Stratified(prior, seed);
-            case BASELINE_PERSISTENCE -> new UnitModel.Persistence(thresholdPct);
+            case BASELINE_PERSISTENCE -> new UnitModel.Persistence();
             case LOGISTIC -> logistic(params, x, y, pre);
             case DECISION_TREE -> {
                 DecisionTree.Options o = new DecisionTree.Options(SplitRule.GINI,

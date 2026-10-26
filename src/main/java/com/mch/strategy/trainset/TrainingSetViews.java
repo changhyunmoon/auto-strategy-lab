@@ -22,6 +22,10 @@ public final class TrainingSetViews {
             List<String> extraIntervals,
             List<String> featureGroups,
             String thresholdPct,
+            /* 정답 설명 한 줄 (예: 5봉(1분) 뒤 종가 수익률 · 기준 ±0.3%) */
+            String labelText,
+            /* 예측 기간 N봉 */
+            int horizon,
             String trainPeriod,
             String valPeriod,
             String testPeriod,

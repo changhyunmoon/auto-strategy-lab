@@ -4,6 +4,7 @@ $(function () {
   var timer = null;
   var sortKey = 'valMacroF1', sortDesc = true;
   var chart = echarts.init(document.getElementById('compareChart'), 'clean');
+  var returnChart = echarts.init(document.getElementById('returnChart'), 'clean');
 
   function group(r) {
     return r.status === 'READY' ? 'READY' : r.status === 'FAILED' ? 'FAILED' : 'RUNNING';
@@ -57,17 +58,22 @@ $(function () {
       $tr.append($('<td></td>').append($('<span class="tag"></span>').text(r.modelLabel)).attr('title', r.trainUnit + ' · ' + r.balance));
       $tr.append($('<td class="muted small"></td>').text(r.trainingSetName));
       $tr.append($('<td></td>').append(statusCell(r)));
+      $tr.append($('<td class="small muted"></td>').text(r.folds > 1 ? r.validation + ' ' + r.folds + '폴드' : r.validation));
       var $f1 = $('<td class="num"></td>').text(App.fixed(r.valMacroF1));
       if (r.valMacroF1 != null && r.valBaselineMacroF1 != null) {
         var d = r.valMacroF1 - r.valBaselineMacroF1;
         $f1.append($('<span class="small"></span>').addClass(d > 0 ? 'diff-up' : 'diff-down').text(' (' + (d >= 0 ? '+' : '') + d.toFixed(3) + ')'));
       }
       $tr.append($f1);
+      $tr.append($('<td class="num"></td>').text(r.valFoldF1Min == null ? '–' : App.fixed(r.valFoldF1Min))
+        .attr('title', r.valFoldF1Mean == null ? '워크포워드에서만 계산' : '폴드 평균 ' + App.fixed(r.valFoldF1Mean) + ' ± ' + App.fixed(r.valFoldF1Std)));
       $tr.append($('<td class="num"></td>').text(App.pct(r.valBalancedAccuracy)));
-      $tr.append($('<td class="num"></td>').text(App.pct(r.valAccuracy)));
       $tr.append($('<td class="num"></td>').text(App.fixed(r.valLogLoss)));
       var gap = r.trainMacroF1 != null && r.valMacroF1 != null ? r.trainMacroF1 - r.valMacroF1 : null;
       $tr.append($('<td class="num"></td>').text(gap == null ? '–' : (gap >= 0 ? '+' : '') + gap.toFixed(3)).toggleClass('diff-down', gap != null && gap > 0.1));
+      $tr.append($('<td class="num"></td>').text(r.valNetReturn == null ? '–' : (r.valNetReturn >= 0 ? '+' : '') + r.valNetReturn.toFixed(2) + '%')
+        .toggleClass('diff-up', r.valNetReturn > 0).toggleClass('diff-down', r.valNetReturn < 0).attr('title', r.valTrades == null ? '' : '거래 ' + r.valTrades + '번'));
+      $tr.append($('<td class="num"></td>').text(r.valMaxDrawdown == null ? '–' : r.valMaxDrawdown.toFixed(2) + '%'));
       $tr.append($('<td class="num"></td>').append(testCell(r)));
       $tr.append($('<td class="num muted"></td>').text(seconds(r.trainSeconds)));
       $tr.append($('<td class="muted"></td>').text(r.createdAt));
@@ -76,9 +82,14 @@ $(function () {
     });
     $('#emptyBox').toggle(all.length === 0);
     $('#runTable').closest('.db-table-wrap').toggle(all.length > 0);
+    // 정렬 표시는 별도 칸에만 쓴다 (제목 글자를 다시 쓰면 ⓘ 도움말 버튼이 지워진다)
     $('.sortable').each(function () {
-      var k = $(this).data('sort'), base = $(this).text().replace(/ [▾▴]$/, '');
-      $(this).text(base + (k === sortKey ? (sortDesc ? ' ▾' : ' ▴') : '')).css('cursor', 'pointer');
+      var $h = $(this), k = $h.data('sort');
+      if (!$h.data('sortInit')) {
+        $h.contents().filter(function () { return this.nodeType === 3; }).each(function () { this.nodeValue = this.nodeValue.replace(/ [▾▴]\s*$/, ''); });
+        $h.append('<span class="sort-mark"></span>').css('cursor', 'pointer').data('sortInit', true);
+      }
+      $h.find('.sort-mark').text(k === sortKey ? (sortDesc ? ' ▾' : ' ▴') : '');
     });
     drawCompare();
   }
@@ -117,8 +128,26 @@ $(function () {
             data: [{ xAxis: baseline }]
           }
         },
-        { name: '균형 정확도', type: 'bar', barWidth: 14, data: done.map(function (r) { return r.valBalancedAccuracy; }), itemStyle: { color: '#d9730d' } }
+        { name: '균형 정확도', type: 'bar', barWidth: 14, data: done.map(function (r) { return r.valBalancedAccuracy; }), itemStyle: { color: '#d9730d' } },
+        { name: '폴드 최저 Macro F1', type: 'scatter', symbol: 'diamond', symbolSize: 10, data: done.map(function (r) { return r.valFoldF1Min; }), itemStyle: { color: '#37352f' } }
       ]
+    }, true);
+
+    // 검증 순수익 (기본 규칙)
+    var withTrade = done.filter(function (r) { return r.valNetReturn != null; });
+    $('#returnChart').css('height', Math.max(200, 50 + withTrade.length * 30) + 'px');
+    returnChart.resize();
+    returnChart.setOption({
+      grid: { left: 190, right: 70, top: 10, bottom: 30 },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: function (ps) {
+        var r = withTrade[ps[0].dataIndex];
+        return '<b>' + $('<div>').text(r.name).html() + '</b><br>순수익 ' + r.valNetReturn.toFixed(2) + '% · 최대 낙폭 ' + App.fixed(r.valMaxDrawdown, 2) + '% · 거래 ' + r.valTrades + '번' +
+          (r.testNetReturn != null ? '<br>최종 테스트 순수익 ' + r.testNetReturn.toFixed(2) + '%' : '');
+      } },
+      xAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+      yAxis: { type: 'category', data: withTrade.map(function (r) { return '#' + r.id + ' ' + r.modelLabel; }), axisLabel: { width: 170, overflow: 'truncate' } },
+      series: [{ type: 'bar', barWidth: 14, data: withTrade.map(function (r) { return { value: r.valNetReturn, itemStyle: { color: r.valNetReturn >= 0 ? '#e03e3e' : '#2383e2' } }; }),
+        label: { show: true, position: 'right', fontSize: 11, formatter: function (p) { return Number(p.value).toFixed(2) + '%'; } } }]
     }, true);
   }
 
@@ -154,7 +183,7 @@ $(function () {
     if (!window.confirm('「' + r.name + '」 실험을 지울까요? 저장된 모델 · 예측 · 결과 파일도 지워집니다.')) return;
     App.api('DELETE', '/api/runs/' + id).done(function () { App.toast('삭제했습니다.'); load(); });
   });
-  $(window).on('resize', function () { chart.resize(); });
+  $(window).on('resize', function () { chart.resize(); returnChart.resize(); });
 
   if ($('#setFilter').val()) $('#newRunLink').attr('href', '/training?trainingSetId=' + $('#setFilter').val());
   load();

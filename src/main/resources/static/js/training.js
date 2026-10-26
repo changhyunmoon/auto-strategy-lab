@@ -9,7 +9,7 @@ $(function () {
   function setHint() {
     var $o = $('#setSel option:selected');
     if (!$o.length) return;
-    $('#setHint').text($o.data('assets') + ' · ' + $o.data('interval') + ' · 정답 ±' + $o.data('threshold') + '% · ' +
+    $('#setHint').text($o.data('assets') + ' · ' + $o.data('interval') + ' · ' + $o.data('label') + ' · ' +
       App.formatNumber($o.data('rows')) + '행 × ' + $o.data('cols') + '열 · 학습 ' + $o.data('train') + ' · 검증 ' + $o.data('val') + ' · 테스트 ' + $o.data('test'));
     suggestName();
   }
@@ -79,12 +79,37 @@ $(function () {
   function describe(name) {
     var v = $('input[name="' + name + '"]:checked').val();
     var c = CHOICES[name].filter(function (x) { return x.code === v; })[0];
-    $('#' + { trainUnit: 'trainUnitHint', balance: 'balanceHint', earlyStopping: 'earlyHint' }[name]).text(c ? c.description : '');
+    $('#' + { trainUnit: 'trainUnitHint', balance: 'balanceHint', earlyStopping: 'earlyHint', validation: 'validationHint' }[name]).text(c ? c.description : '');
+    if (name === 'validation') wfPreview();
   }
-  ['trainUnit', 'balance', 'earlyStopping'].forEach(function (n) {
+  ['trainUnit', 'balance', 'earlyStopping', 'validation'].forEach(function (n) {
     $(document).on('change', 'input[name="' + n + '"]', function () { describe(n); updateCount(); });
     describe(n);
   });
+
+  // ---------- 워크포워드 미리보기: 탐색 기간(학습 + 검증) 위에 첫 학습과 검증 블록을 그린다 ----------
+  function wfPreview() {
+    var v = $('input[name="validation"]:checked').val();
+    var wf = v && v !== 'HOLDOUT';
+    $('.wf-only').toggle(!!wf);
+    $('.rolling-only').toggle(v === 'WALK_FORWARD_ROLLING');
+    if (!wf) return;
+    var $o = $('#setSel option:selected');
+    var start = Date.parse(String($o.data('train')).split(' ~ ')[0] + 'T00:00:00Z');
+    var end = Date.parse(String($o.data('val')).split(' ~ ')[1] + 'T00:00:00Z') + 86400000;
+    var folds = Math.max(2, Math.min(12, Number($('#folds').val()) || 4));
+    var frac = Math.max(0.2, Math.min(0.9, (Number($('#firstTrainFraction').val()) || 50) / 100));
+    var days = (end - start) / 86400000, blockDays = days * (1 - frac) / folds;
+    var $tl = $('#wfTimeline').empty();
+    $tl.append($('<div class="seg seg-train"></div>').css('flex', String(frac)).text('첫 학습 ' + Math.round(days * frac) + '일'));
+    for (var k = 0; k < folds; k++) {
+      $tl.append($('<div class="seg"></div>').addClass(k % 2 ? 'seg-val' : 'seg-test').css('flex', String((1 - frac) / folds)).text('검증 ' + (k + 1)));
+    }
+    $('#wfPreview').text('탐색 기간 ' + Math.round(days) + '일 → 검증 블록 ' + folds + '개 × 약 ' + blockDays.toFixed(1) + '일. 폴드 k 는 블록 k 바로 앞까지 ' +
+      (v === 'WALK_FORWARD_ROLLING' ? '최근 ' + $('#rollingDays').val() + '일' : '처음부터 전부') + '로 학습합니다.' +
+      (blockDays < 1 ? ' 블록이 하루보다 짧습니다 — 폴드 수를 줄여 보세요.' : ''));
+  }
+  $('#folds, #firstTrainFraction, #rollingDays').on('input', wfPreview);
 
   var nameTouched = false;
   $('#runName').on('input', function () { nameTouched = true; });
@@ -111,6 +136,10 @@ $(function () {
       trainUnit: $('input[name="trainUnit"]:checked').val(),
       balance: $('input[name="balance"]:checked').val(),
       earlyStopping: $('input[name="earlyStopping"]:checked').val(),
+      validation: $('input[name="validation"]:checked').val(),
+      folds: Number($('#folds').val()),
+      firstTrainFraction: Number($('#firstTrainFraction').val()) / 100,
+      rollingDays: Number($('#rollingDays').val()),
       seed: Number($('#seed').val()),
       maxTrainRows: Number($('#maxTrainRows').val()),
       permutationImportance: $('#permutation').is(':checked'),
@@ -122,14 +151,17 @@ $(function () {
     }).fail(function () { $('#submitBtn').prop('disabled', false); });
   });
 
-  $('#setSel').on('change', setHint);
+  $('#setSel').on('change', function () { setHint(); wfPreview(); });
 
   // ---------- 같은 설정으로 다시 (?copy=실험ID) ----------
   if (COPY) {
     pick([COPY.model]);
     var $card = $('.model-card[data-code="' + COPY.model + '"]').addClass('open');
     Object.keys(COPY.params || {}).forEach(function (k) { $card.find('.param[data-key="' + k + '"]').val(COPY.params[k]); });
-    ['trainUnit', 'balance', 'earlyStopping'].forEach(function (n) {
+    if (COPY.folds) $('#folds').val(COPY.folds);
+    if (COPY.firstTrainFraction) $('#firstTrainFraction').val(Math.round(COPY.firstTrainFraction * 100));
+    if (COPY.rollingDays) $('#rollingDays').val(COPY.rollingDays);
+    ['trainUnit', 'balance', 'earlyStopping', 'validation'].forEach(function (n) {
       $('input[name="' + n + '"][value="' + COPY[n] + '"]').prop('checked', true);
       describe(n);
     });

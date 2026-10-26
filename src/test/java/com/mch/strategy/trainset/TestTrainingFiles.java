@@ -10,7 +10,7 @@ import java.util.Random;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * 테스트용 학습 데이터 폴더를 만든다. 자산 2개 · 열 4개.
+ * 테스트용 학습 데이터 폴더를 만든다. 자산 2개 · 열 4개 · 5분 판단 · 예측 기간 1봉.
  * 첫 열(signal)이 정답을 잘 설명하고, 나머지는 잡음이다. 결측(NaN)도 조금 섞는다.
  * 자산마다 앞 60% 학습 · 20% 검증 · 20% 최종 테스트.
  */
@@ -28,9 +28,12 @@ public final class TestTrainingFiles {
              BinaryColumnWriter fa = new BinaryColumnWriter(dir.resolve(TrainingFiles.ASSET));
              BinaryColumnWriter ft = new BinaryColumnWriter(dir.resolve(TrainingFiles.TIME));
              BinaryColumnWriter ff = new BinaryColumnWriter(dir.resolve(TrainingFiles.FORWARD));
-             BinaryColumnWriter fp = new BinaryColumnWriter(dir.resolve(TrainingFiles.PREVIOUS))) {
+             BinaryColumnWriter fp = new BinaryColumnWriter(dir.resolve(TrainingFiles.PREVIOUS));
+             BinaryColumnWriter fc = new BinaryColumnWriter(dir.resolve(TrainingFiles.CLOSE));
+             BinaryColumnWriter fth = new BinaryColumnWriter(dir.resolve(TrainingFiles.THRESHOLD))) {
             for (int a = 0; a < 2; a++) {
                 double prev = Double.NaN;
+                double price = 100;
                 for (int i = 0; i < rowsPerAsset; i++) {
                     double signal = r.nextGaussian();
                     double fwd = signal * 0.4 + r.nextGaussian() * 0.1;
@@ -38,19 +41,26 @@ public final class TestTrainingFiles {
                     fx.writeFloat(r.nextGaussian());
                     fx.writeFloat(i % 50 == 0 ? Double.NaN : r.nextDouble());
                     fx.writeFloat(a);
-                    fy.writeByte(TrainingRows.label(fwd, 0.3));
+                    int label = TrainingRows.label(fwd, 0.3);
+                    fy.writeByte(label);
                     fs.writeByte(i < rowsPerAsset * 0.6 ? 0 : i < rowsPerAsset * 0.8 ? 1 : 2);
                     fa.writeByte(a);
                     ft.writeLong(1_760_000_000_000L + i * 300_000L);
                     ff.writeFloat(fwd);
                     fp.writeFloat(prev);
-                    prev = fwd;
+                    fc.writeFloat(price);
+                    fth.writeFloat(0.3);
+                    prev = label;
+                    price *= 1 + fwd / 100; // 다음 봉 종가 = 이번 정답 수익률만큼 움직인 가격
                 }
             }
         }
         new ObjectMapper().writeValue(dir.resolve(TrainingFiles.META).toFile(), Map.of(
+                "format", TrainingFiles.FORMAT,
                 "rows", rowsPerAsset * 2,
                 "columns", List.of("signal", "noise", "noise_with_gaps", "asset_flag"),
-                "assets", List.of("BTC", "ETH")));
+                "assets", List.of("BTC", "ETH"),
+                "label", Map.of("horizon", 1),
+                "decisionMinutes", 5));
     }
 }

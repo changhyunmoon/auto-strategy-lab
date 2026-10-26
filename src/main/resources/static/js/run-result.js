@@ -14,15 +14,23 @@ var ResultView = (function ($) {
     return $d;
   }
 
+  /** 섹션 제목 · 카드 이름 → 용어 사전 키 (ⓘ 도움말) */
+  var TERMS = {
+    'Macro F1': 'macroF1', '균형 정확도': 'balancedAccuracy', '정확도': 'accuracy', 'Log loss': 'logLoss',
+    '상승 정밀도 · 재현율': 'precision', '하락 정밀도 · 재현율': 'recall', '혼동행렬': 'confusion',
+    '정밀도-재현율 곡선': 'prCurve', '확률 보정': 'calibration', '확률 기준별 신호': 'probThreshold'
+  };
+
   function section(title, sub) {
     var $s = $('<div class="result-section"></div>');
-    $s.append($('<h3></h3>').text(title).append(sub ? $('<span class="count"></span>').text(sub) : ''));
+    $s.append($('<h3></h3>').append($('<span></span>').attr('data-term', TERMS[title] || null).text(title))
+      .append(sub ? $('<span class="count"></span>').text(sub) : ''));
     return $s;
   }
 
   function card(label, value, sub, cls, title) {
     var $c = $('<div class="card-stat"></div>').attr('title', title || '');
-    $c.append($('<div class="label"></div>').text(label));
+    $c.append($('<div class="label"></div>').append($('<span></span>').attr('data-term', TERMS[label] || null).text(label)));
     $c.append($('<div class="value"></div>').text(value));
     if (sub) $c.append($('<div class="sub"></div>').addClass(cls || '').text(sub));
     return $c;
@@ -76,7 +84,7 @@ var ResultView = (function ($) {
       var $cards = $('<div class="cards"></div>').appendTo($sum);
       var up = s.perClass[2], down = s.perClass[0];
       var dF1 = diff(s.macroF1, base && base.macroF1), dAcc = diff(s.accuracy, base && base.accuracy);
-      $cards.append(card('Macro F1', App.fixed(s.macroF1), dF1 && dF1.text, dF1 && dF1.cls, '상승·중립·하락 F1 의 단순 평균. 1차 비교 기준'));
+      $cards.append(card('Macro F1', App.fixed(s.macroF1), dF1 && dF1.text, dF1 && dF1.cls));
       $cards.append(card('균형 정확도', App.pct(s.balancedAccuracy), '클래스별 재현율 평균', null));
       $cards.append(card('정확도', App.pct(s.accuracy), dAcc && dAcc.text.replace(/([+-]\d\.\d+)/, function (m) { return (Number(m) * 100).toFixed(1) + '%p'; }), dAcc && dAcc.cls));
       $cards.append(card('Log loss', App.fixed(s.logLoss), result.hasProba ? '낮을수록 확률이 정확' : '확률을 내지 않는 모델', null));
@@ -131,7 +139,7 @@ var ResultView = (function ($) {
 
       // ---------- 클래스별 표 ----------
       var $cls = section('클래스별 성능').appendTo($body);
-      var $t = $('<table class="db-table"><thead><tr><th>클래스</th><th class="num">정밀도</th><th class="num">재현율</th><th class="num">F1</th><th class="num">실제 건수</th><th class="num">예측 건수</th></tr></thead><tbody></tbody></table>');
+      var $t = $('<table class="db-table"><thead><tr><th>클래스</th><th class="num"><span data-term="precision">정밀도</span></th><th class="num"><span data-term="recall">재현율</span></th><th class="num"><span data-term="f1">F1</span></th><th class="num">실제 건수</th><th class="num">예측 건수</th></tr></thead><tbody></tbody></table>');
       s.perClass.forEach(function (c) {
         $t.find('tbody').append($('<tr></tr>').append($('<td></td>').text(c.label))
           .append($('<td class="num"></td>').text(App.pct(c.precision)).attr('title', c.precision == null ? '예측한 적이 없어 계산 불가' : ''))

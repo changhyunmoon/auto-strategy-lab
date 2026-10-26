@@ -73,6 +73,8 @@ public class TrainingSetBuilder {
     private Result write(TrainingSet ts, Path dir, long jobId) throws IOException {
         MlPaths.deleteTree(dir);
         Files.createDirectories(dir);
+        LabelSpec spec = ts.labelSpec();
+        List<LabelSpec> alternatives = spec.alternatives();
 
         List<DatasetColumn> all = columnRepository.findByDatasetIdOrderByColumnIndexAsc(ts.getDatasetId());
         if (all.isEmpty()) {
@@ -81,7 +83,9 @@ public class TrainingSetBuilder {
         List<DatasetColumn> selected = ColumnSelection.select(all, featureRegistry, Set.copyOf(ts.getFeatureGroups()),
                 ts.isIncludeBarColumns());
         List<DatasetColumn> extraCols = ColumnSelection.featuresOnly(selected);
-        int closeIndex = ColumnSelection.closeIndex(all);
+        int closeIndex = ColumnSelection.barIndex(all, "close");
+        int highIndex = ColumnSelection.barIndex(all, "high");
+        int lowIndex = ColumnSelection.barIndex(all, "low");
 
         List<String> columnNames = new ArrayList<>();
         selected.forEach(c -> columnNames.add(c.getColumnName()));
@@ -101,7 +105,7 @@ public class TrainingSetBuilder {
             codes.put(a.getId(), a.getCode());
         }
         Stats stats = new Stats(ts.getAssetIds().stream().map(id -> codes.getOrDefault(id, "?")).toList(),
-                ts.getExtraIntervals());
+                ts.getExtraIntervals(), alternatives, spec);
 
         long written = 0;
         try (BinaryColumnWriter fx = new BinaryColumnWriter(dir.resolve(TrainingFiles.FEATURES));
@@ -110,7 +114,9 @@ public class TrainingSetBuilder {
              BinaryColumnWriter fa = new BinaryColumnWriter(dir.resolve(TrainingFiles.ASSET));
              BinaryColumnWriter ft = new BinaryColumnWriter(dir.resolve(TrainingFiles.TIME));
              BinaryColumnWriter ff = new BinaryColumnWriter(dir.resolve(TrainingFiles.FORWARD));
-             BinaryColumnWriter fp = new BinaryColumnWriter(dir.resolve(TrainingFiles.PREVIOUS))) {
+             BinaryColumnWriter fp = new BinaryColumnWriter(dir.resolve(TrainingFiles.PREVIOUS));
+             BinaryColumnWriter fc = new BinaryColumnWriter(dir.resolve(TrainingFiles.CLOSE));
+             BinaryColumnWriter fth = new BinaryColumnWriter(dir.resolve(TrainingFiles.THRESHOLD))) {
 
             int assetCount = ts.getAssetIds().size();
             for (int a = 0; a < assetCount; a++) {
@@ -134,7 +140,10 @@ public class TrainingSetBuilder {
                 }
 
                 jobService.update(jobId, base + span / 2, code + " 정답 · 구간 계산", null);
-                TrainingRows.Plan[] plan = TrainingRows.plan(rows.time(), rows.column(closeIndex), decisionMs, ranges);
+                double[] close = rows.column(closeIndex);
+                TrainingRows.Calculator calc = new TrainingRows.Calculator(rows.time(), close,
+                        rows.column(highIndex), rows.column(lowIndex), decisionMs);
+                TrainingRows.Plan[] plan = TrainingRows.plan(calc, ranges, spec);
 
                 for (int i = 0; i < plan.length; i++) {
                     TrainingRows.Plan p = plan[i];
@@ -156,14 +165,15 @@ public class TrainingSetBuilder {
                             fx.writeFloat(ev == null ? Double.NaN : value(ev, c.getColumnIndex()));
                         }
                     }
-                    int label = TrainingRows.label(p.forwardPct(), ts.getThresholdPct().doubleValue());
-                    fy.writeByte(label);
+                    fy.writeByte(p.label());
                     fs.writeByte(p.split());
                     fa.writeByte(a);
                     ft.writeLong(rows.time()[i]);
                     ff.writeFloat(p.forwardPct());
-                    fp.writeFloat(p.prevPct());
-                    stats.row(p.split(), a, rows.time()[i], p.forwardPct());
+                    fp.writeFloat(p.previousLabel());
+                    fc.writeFloat(close[i]);
+                    fth.writeFloat(p.thresholdPct());
+                    stats.row(p, a, rows.time()[i], calc, i);
                     written++;
                 }
                 jobService.update(jobId, base + span, code + " 완료", null);
@@ -179,17 +189,19 @@ public class TrainingSetBuilder {
         }
 
         Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("format", TrainingFiles.FORMAT);
         meta.put("trainingSetId", ts.getId());
         meta.put("rows", written);
         meta.put("columns", columnNames);
         meta.put("assets", stats.assets);
         meta.put("labels", List.of("하락", "중립", "상승"));
-        meta.put("thresholdPct", ts.getThresholdPct());
+        meta.put("label", spec.toMap());
         meta.put("decisionInterval", ts.getDecisionInterval());
+        meta.put("decisionMinutes", Intervals.minutes(ts.getDecisionInterval()));
         meta.put("extraIntervals", ts.getExtraIntervals());
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve(TrainingFiles.META).toFile(), meta);
 
-        return new Result(written, columnNames, stats.toMap(ts.getThresholdPct().doubleValue()));
+        return new Result(written, columnNames, stats.toMap());
     }
 
     private static double value(double[] row, int index) {
@@ -199,26 +211,34 @@ public class TrainingSetBuilder {
     private record Result(long rows, List<String> columns, Map<String, Object> stats) {
     }
 
-    /** 구간·자산별 행 수, 정답 분포(기준 %마다), 제외 사유 */
+    /** 구간·자산별 행 수, 정답 분포(같은 방식의 다른 기준마다), 제외 사유, 기준 분포 */
     private static final class Stats {
         final List<String> assets;
         final List<String> extraIntervals;
+        final List<LabelSpec> alternatives;
+        final LabelSpec spec;
         final long[] rows = new long[3];
         final long[][] rowsByAsset;
         final long[] first = {Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE};
         final long[] last = {Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE};
-        /** classCounts[split][asset][threshold][class] — 최종 테스트는 집계하지 않는다 */
+        /** classCounts[split][asset][대안][class] — 최종 테스트는 집계하지 않는다 */
         final long[][][][] classCounts;
+        /** 선택한 정답 기준의 학습·검증 구간 평균(%) · 동시 도달 수 */
+        final double[] thresholdSum = new double[2];
+        final long[] ambiguous = new long[2];
         final Map<String, Long> excluded = new LinkedHashMap<>();
         final long[] extraMissing;
 
-        Stats(List<String> assets, List<String> extraIntervals) {
+        Stats(List<String> assets, List<String> extraIntervals, List<LabelSpec> alternatives, LabelSpec spec) {
             this.assets = assets;
             this.extraIntervals = extraIntervals;
+            this.alternatives = alternatives;
+            this.spec = spec;
             this.rowsByAsset = new long[3][assets.size()];
-            this.classCounts = new long[2][assets.size()][TrainingRows.THRESHOLDS.length][3];
+            this.classCounts = new long[2][assets.size()][alternatives.size()][3];
             this.extraMissing = new long[extraIntervals.size()];
-            for (String k : List.of(TrainingRows.OUTSIDE, TrainingRows.NO_NEXT_BAR, TrainingRows.CROSSES_BOUNDARY, TrainingRows.MISSING_PRICE)) {
+            for (String k : List.of(TrainingRows.OUTSIDE, TrainingRows.NO_NEXT_BAR, TrainingRows.CROSSES_BOUNDARY,
+                    TrainingRows.MISSING_PRICE, TrainingRows.NO_VOLATILITY)) {
                 excluded.put(k, 0L);
             }
         }
@@ -231,19 +251,28 @@ public class TrainingSetBuilder {
             extraMissing[e]++;
         }
 
-        void row(int split, int asset, long time, double forwardPct) {
+        void row(TrainingRows.Plan p, int asset, long time, TrainingRows.Calculator calc, int i) {
+            int split = p.split();
             rows[split]++;
             rowsByAsset[split][asset]++;
             first[split] = Math.min(first[split], time);
             last[split] = Math.max(last[split], time);
             if (split < 2) {
-                for (int t = 0; t < TrainingRows.THRESHOLDS.length; t++) {
-                    classCounts[split][asset][t][TrainingRows.label(forwardPct, TrainingRows.THRESHOLDS[t])]++;
+                thresholdSum[split] += p.thresholdPct();
+                if (p.ambiguous()) {
+                    ambiguous[split]++;
+                }
+                for (int t = 0; t < alternatives.size(); t++) {
+                    int l = alternatives.get(t).sameAlternative(spec) ? p.label() : calc.labelFor(i, alternatives.get(t));
+                    if (l >= 0) {
+                        classCounts[split][asset][t][l]++;
+                    }
                 }
             }
         }
 
-        Map<String, Object> toMap(double selectedThreshold) {
+        Map<String, Object> toMap() {
+            List<String> altKeys = alternatives.stream().map(LabelSpec::alternativeLabel).toList();
             Map<String, Object> splits = new LinkedHashMap<>();
             for (int s = 0; s < 3; s++) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -256,27 +285,29 @@ public class TrainingSetBuilder {
                 }
                 m.put("byAsset", byAsset);
                 if (s < 2) {
-                    // classes[asset 또는 "ALL"][기준 %] = [하락, 중립, 상승]
+                    // classes[asset 또는 "ALL"][대안 이름] = [하락, 중립, 상승]
                     Map<String, Map<String, long[]>> classes = new LinkedHashMap<>();
                     Map<String, long[]> total = new LinkedHashMap<>();
-                    for (int t = 0; t < TrainingRows.THRESHOLDS.length; t++) {
+                    for (int t = 0; t < alternatives.size(); t++) {
                         long[] sum = new long[3];
                         for (int a = 0; a < assets.size(); a++) {
                             for (int c = 0; c < 3; c++) {
                                 sum[c] += classCounts[s][a][t][c];
                             }
                         }
-                        total.put(String.valueOf(TrainingRows.THRESHOLDS[t]), sum);
+                        total.put(altKeys.get(t), sum);
                     }
                     classes.put("ALL", total);
                     for (int a = 0; a < assets.size(); a++) {
                         Map<String, long[]> byT = new LinkedHashMap<>();
-                        for (int t = 0; t < TrainingRows.THRESHOLDS.length; t++) {
-                            byT.put(String.valueOf(TrainingRows.THRESHOLDS[t]), classCounts[s][a][t].clone());
+                        for (int t = 0; t < alternatives.size(); t++) {
+                            byT.put(altKeys.get(t), classCounts[s][a][t].clone());
                         }
                         classes.put(assets.get(a), byT);
                     }
                     m.put("classes", classes);
+                    m.put("meanThresholdPct", rows[s] == 0 ? null : thresholdSum[s] / rows[s]);
+                    m.put("ambiguous", ambiguous[s]);
                 }
                 splits.put(SPLIT_KEYS[s], m);
             }
@@ -286,8 +317,8 @@ public class TrainingSetBuilder {
             }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("assets", assets);
-            out.put("thresholds", TrainingRows.THRESHOLDS);
-            out.put("selectedThreshold", selectedThreshold);
+            out.put("alternatives", altKeys);
+            out.put("selected", spec.alternativeLabel());
             out.put("splits", splits);
             out.put("excluded", excluded);
             out.put("extraMissing", missing);

@@ -317,3 +317,22 @@
 #runTable td:first-child { min-width: 220px; }
 #runTable td, #runTable th { white-space: nowrap; }
 #runTable td:first-child { white-space: normal; }
+
+/* ---------- 용어 도움말 (glossary.js) ---------- */
+.term-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-left: 3px; padding: 0;
+  border: none; border-radius: 50%; background: transparent;
+  color: var(--text-tertiary); font-size: 12px; line-height: 1; cursor: help; vertical-align: middle;
+}
+.term-help:hover, .term-help:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+.gl-pop {
+  position: absolute; z-index: 100; display: none;
+  max-width: 340px; padding: 10px 12px;
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(15, 15, 15, .12);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); font-weight: 400; text-align: left; white-space: normal;
+}
+.gl-pop .gl-title { font-weight: 600; color: var(--text); font-size: 13px; margin-bottom: 4px; }
+.gl-pop .gl-row + .gl-row { margin-top: 3px; }
+.gl-pop .gl-row b { color: var(--text); font-weight: 600; margin-right: 2px; }

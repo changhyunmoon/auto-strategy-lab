@@ -21,8 +21,9 @@ public class ModelRunStateService {
     }
 
     @Transactional
-    public void trained(long id, ModelRun.Scores train, ModelRun.Scores val, Double baselineMacroF1, double seconds) {
-        repository.findById(id).ifPresent(r -> r.trained(train, val, baselineMacroF1, seconds));
+    public void trained(long id, ModelRun.Scores train, ModelRun.Scores val, Double baselineMacroF1,
+                        ModelRun.FoldStats folds, Backtester.Summary trade, double seconds) {
+        repository.findById(id).ifPresent(r -> r.trained(train, val, baselineMacroF1, folds, trade, seconds));
     }
 
     @Transactional
@@ -36,8 +37,8 @@ public class ModelRunStateService {
     }
 
     @Transactional
-    public void tested(long id, ModelRun.Scores test) {
-        repository.findById(id).ifPresent(r -> r.tested(test));
+    public void tested(long id, ModelRun.Scores test, Backtester.Summary trade) {
+        repository.findById(id).ifPresent(r -> r.tested(test, trade));
     }
 
     @Transactional

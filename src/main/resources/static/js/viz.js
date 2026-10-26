@@ -217,7 +217,12 @@ $(function () {
       var rows = [['개수', App.formatNumber(r.count)], ['결측 비율', (r.missingRate * 100).toFixed(2) + '%'],
         ['평균', f4(r.mean)], ['표준편차', f4(r.std)], ['최솟값', f4(r.min)], ['25%', f4(r.q25)],
         ['중앙값', f4(r.median)], ['75%', f4(r.q75)], ['최댓값', f4(r.max)]];
-      $('#distStats').html(rows.map(function (x) { return '<tr><td class="muted">' + x[0] + '</td><td class="num">' + x[1] + '</td></tr>'; }).join(''));
+      // 용어 도움말 (glossary.js) 이 붙을 이름
+      var terms = { '결측 비율': 'missing', '표준편차': 'stdev', '25%': 'quantile', '중앙값': 'quantile', '75%': 'quantile' };
+      $('#distStats').html(rows.map(function (x) {
+        var name = terms[x[0]] ? '<span data-term="' + terms[x[0]] + '">' + x[0] + '</span>' : x[0];
+        return '<tr><td class="muted">' + name + '</td><td class="num">' + x[1] + '</td></tr>';
+      }).join(''));
     });
   }
 

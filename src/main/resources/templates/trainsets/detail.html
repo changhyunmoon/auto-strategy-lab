@@ -37,13 +37,14 @@
     <div class="prop"><div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
       <div class="prop-value"><span class="tag" th:each="a : ${t.summary.assets}" th:text="${a}">BTC</span></div>
     </div>
-    <div class="prop"><div class="prop-label"><span class="prop-icon">⏱️</span>판단 간격</div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">⏱️</span><span data-term="decisionInterval">판단 간격</span></div>
       <div class="prop-value"><span class="tag" th:text="${t.summary.interval}">1분</span>
         <span class="muted small" th:unless="${t.summary.extraIntervals.isEmpty()}" th:text="${'+ ' + #strings.listJoin(t.summary.extraIntervals, '·') + ' 지표 (완성 봉만)'}"></span>
       </div>
     </div>
-    <div class="prop"><div class="prop-label"><span class="prop-icon">🎯</span>정답</div>
-      <div class="prop-value">다음 봉 종가 수익률 <span class="tag tag-blue" th:text="${'±' + t.summary.thresholdPct + '%'}">±0.3%</span> 기준 상승 · 중립 · 하락</div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🎯</span><span data-term="label">정답</span></div>
+      <div class="prop-value"><span th:text="${t.summary.labelText}">5봉 뒤 종가 수익률 · 기준 ±0.3%</span> → 상승 · 중립 · 하락
+        <div class="hint" id="labelStatsHint"></div></div>
     </div>
     <div class="prop"><div class="prop-label"><span class="prop-icon">📊</span>입력 지표</div>
       <div class="prop-value"><span class="tag" th:each="g : ${t.featureGroupLabels}" th:text="${g}">A</span>
@@ -89,12 +90,12 @@
       <p><b>주의:</b> 상승 · 하락이 너무 적으면(수백 건 이하) 어떤 모델도 의미 있게 비교하기 어렵습니다. 그럴 땐 정답 기준 %를 낮춰 새로 만드는 것을 고려하세요.</p>
     </div></details>
 
-    <h3 style="font-size:15px;font-weight:600;margin-top:20px">다른 정답 기준이었다면 <span class="small muted" style="font-weight:400">같은 행을 기준 %만 바꿔 셌을 때의 비율 (전체 자산)</span></h3>
+    <h3 style="font-size:15px;font-weight:600;margin-top:20px">다른 정답 기준이었다면 <span class="small muted" style="font-weight:400">같은 행 · 같은 방식 · 같은 예측 기간에서 기준만 바꿔 셌을 때의 비율 (전체 자산)</span></h3>
     <div class="db-table-wrap">
       <table class="db-table db-table--compact" id="thresholdTable"></table>
     </div>
 
-    <h2 class="section-title">제외한 행</h2>
+    <h2 class="section-title"><span data-term="excluded">제외한 행</span></h2>
     <div class="db-table-wrap">
       <table class="db-table db-table--compact" id="excludedTable">
         <thead><tr><th>사유</th><th class="num">행</th><th>설명</th></tr></thead>

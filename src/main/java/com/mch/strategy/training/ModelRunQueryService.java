@@ -73,6 +73,10 @@ public class ModelRunQueryService {
         copy.put("balance", r.getBalance().name());
         copy.put("earlyStopping", r.getEarlyStopping().name());
         copy.put("seed", r.getSeed());
+        copy.put("validation", r.getValidation().name());
+        copy.put("folds", r.getFolds());
+        copy.put("firstTrainFraction", r.getFirstTrainFraction());
+        copy.put("rollingDays", r.getRollingDays());
         copy.put("maxTrainRows", r.getMaxTrainRows());
         copy.put("permutationImportance", r.isPermutationImportance());
         return new Detail(
@@ -83,6 +87,10 @@ public class ModelRunQueryService {
                 r.getTrainUnit().getDescription(),
                 r.getBalance().getDescription(),
                 r.getModelType().supportsEarlyStopping() ? r.getEarlyStopping().getLabel() : "해당 없음",
+                validationText(r),
+                r.getValidation().getDescription(),
+                ts == null ? "" : ts.labelSpec().text(Intervals.label(ts.getDecisionInterval())),
+                ts == null ? 1 : ts.labelSpec().horizon(),
                 r.isPermutationImportance(),
                 r.getMemo() == null ? "" : r.getMemo(),
                 ts == null ? "" : Intervals.label(ts.getDecisionInterval())
@@ -140,6 +148,19 @@ public class ModelRunQueryService {
         return Arrays.stream(RunOptions.Balance.values()).map(v -> new Choice(v.name(), v.getLabel(), v.getDescription())).toList();
     }
 
+    public List<Choice> validations() {
+        return Arrays.stream(RunOptions.Validation.values()).map(v -> new Choice(v.name(), v.getLabel(), v.getDescription())).toList();
+    }
+
+    private static String validationText(ModelRun r) {
+        if (!r.getValidation().isWalkForward()) {
+            return r.getValidation().getLabel();
+        }
+        String s = r.getValidation().getLabel() + " · 폴드 " + r.getFolds() + " · 첫 학습 "
+                + Math.round((r.getFirstTrainFraction() == null ? 0.5 : r.getFirstTrainFraction()) * 100) + "%";
+        return r.getRollingDays() == null ? s : s + " · 학습 창 " + r.getRollingDays() + "일";
+    }
+
     public List<Choice> earlyStoppings() {
         return Arrays.stream(RunOptions.EarlyStopping.values()).map(v -> new Choice(v.name(), v.getLabel(), v.getDescription())).toList();
     }
@@ -154,7 +175,10 @@ public class ModelRunQueryService {
                 r.getTrainUnit().getLabel(), r.getBalance().getLabel(), r.getParams(), r.getSeed(), r.getMaxTrainRows(),
                 r.getTrainMacroF1(), r.getValAccuracy(), r.getValBalancedAccuracy(), r.getValMacroF1(), r.getValLogLoss(),
                 r.getValBaselineMacroF1(),
+                r.getValidation().getLabel(), r.getFolds(), r.getValFoldF1Mean(), r.getValFoldF1Std(), r.getValFoldF1Min(),
+                r.getValNetReturn(), r.getValMaxDrawdown(), r.getValTrades(),
                 r.getTestStatus().name(), r.getTestAccuracy(), r.getTestBalancedAccuracy(), r.getTestMacroF1(), r.getTestLogLoss(),
+                r.getTestNetReturn(), r.getTestMaxDrawdown(), r.getTestTrades(),
                 r.getTestRunCount(), r.getTestEvaluatedAt() == null ? "" : TimeUtils.toKstText(r.getTestEvaluatedAt()),
                 r.getTrainSeconds(), TimeUtils.toKstText(r.getCreatedAt()),
                 train == null ? null : train.getId(), train == null ? 0 : train.getProgress(),

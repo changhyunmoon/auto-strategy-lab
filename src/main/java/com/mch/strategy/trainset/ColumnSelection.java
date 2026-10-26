@@ -41,9 +41,9 @@ final class ColumnSelection {
         return selected.stream().filter(c -> !c.isBar()).toList();
     }
 
-    static int closeIndex(List<DatasetColumn> columns) {
-        return columns.stream().filter(c -> c.isBar() && c.getColumnName().equals("close"))
+    static int barIndex(List<DatasetColumn> columns, String name) {
+        return columns.stream().filter(c -> c.isBar() && c.getColumnName().equals(name))
                 .mapToInt(DatasetColumn::getColumnIndex).findFirst()
-                .orElseThrow(() -> new IllegalStateException("데이터세트에 종가(close) 열이 없습니다."));
+                .orElseThrow(() -> new IllegalStateException("데이터세트에 " + name + " 열이 없습니다."));
     }
 }

@@ -34,8 +34,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TrainingSet {
 
-    public static final String LABEL_NEXT_BAR = "NEXT_BAR_DIRECTION";
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -74,8 +72,19 @@ public class TrainingSet {
     @Column(name = "label_method", nullable = false, length = 30)
     private String labelMethod;
 
+    @Column(name = "label_horizon", nullable = false)
+    private int labelHorizon;
+
+    @Column(name = "threshold_mode", nullable = false, length = 20)
+    private String thresholdMode;
+
     @Column(name = "threshold_pct", nullable = false, precision = 6, scale = 3)
     private BigDecimal thresholdPct;
+
+    /** 정답 정의 전체 ({@link LabelSpec#toMap()}) */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "label_params")
+    private Map<String, Object> labelParams;
 
     @Column(name = "train_from", nullable = false)
     private LocalDate trainFrom;
@@ -123,8 +132,12 @@ public class TrainingSet {
         t.assetIds = assetIds;
         t.featureGroups = featureGroups;
         t.includeBarColumns = r.includeBarColumns();
-        t.labelMethod = LABEL_NEXT_BAR;
-        t.thresholdPct = r.thresholdPct();
+        LabelSpec spec = r.labelSpec();
+        t.labelMethod = spec.method();
+        t.labelHorizon = spec.horizon();
+        t.thresholdMode = spec.mode();
+        t.thresholdPct = BigDecimal.valueOf(spec.representativePct()).setScale(3, java.math.RoundingMode.HALF_UP);
+        t.labelParams = spec.toMap();
         t.trainFrom = r.trainFrom();
         t.trainTo = r.trainTo();
         t.valFrom = r.valFrom();
@@ -143,6 +156,11 @@ public class TrainingSet {
     @PreUpdate
     void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    /** 정답 정의. 예전 데이터(세부 값 없음)는 「다음 1봉 · 고정 %」로 본다 */
+    public LabelSpec labelSpec() {
+        return LabelSpec.fromMap(labelParams, thresholdPct.doubleValue());
     }
 
     public boolean isBuilding() {

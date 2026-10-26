@@ -98,7 +98,7 @@
       <th:block th:unless="${d.qualities.isEmpty()}">
         <div class="db-table-wrap">
           <table class="db-table">
-            <thead><tr><th>마켓</th><th class="num">예상 분 수</th><th class="num">실제</th><th class="num">채움률</th><th>비고</th></tr></thead>
+            <thead><tr><th>마켓</th><th class="num">예상 분 수</th><th class="num">실제</th><th class="num"><span data-term="fillRate">채움률</span></th><th>비고</th></tr></thead>
             <tbody>
             <tr th:each="q : ${d.qualities}">
               <td th:text="${q.market}">업비트 KRW-BTC</td>
@@ -147,7 +147,7 @@
         </span>
         <span class="spacer"></span>
         <label class="small muted" style="display:flex;gap:6px;align-items:center;cursor:pointer">
-          <input type="checkbox" class="form-check-input" style="margin:0" id="pvWarmup">워밍업 행 보기
+          <input type="checkbox" class="form-check-input" style="margin:0" id="pvWarmup"><span data-term="warmup">워밍업 행 보기</span>
         </label>
       </div>
       <div class="db-table-wrap">

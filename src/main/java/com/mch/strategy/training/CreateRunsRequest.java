@@ -21,12 +21,20 @@ public record CreateRunsRequest(
         @NotNull RunOptions.TrainUnit trainUnit,
         @NotNull RunOptions.Balance balance,
         @NotNull RunOptions.EarlyStopping earlyStopping,
+        RunOptions.Validation validation,
+        @Min(value = 2, message = "폴드 수는 2 이상이어야 합니다.") @Max(value = 12, message = "폴드 수는 12 이하여야 합니다.") Integer folds,
+        Double firstTrainFraction,
+        @Min(value = 1, message = "학습 창은 1일 이상이어야 합니다.") Integer rollingDays,
         @Min(0) @Max(Integer.MAX_VALUE) int seed,
         @Min(value = 1000, message = "학습 표본 수 상한은 1,000 이상이어야 합니다.")
         @Max(value = 5_000_000, message = "학습 표본 수 상한은 5,000,000 이하여야 합니다.") int maxTrainRows,
         boolean permutationImportance,
         @Size(max = 2000) String memo
 ) {
+
+    public RunOptions.Validation validationOrDefault() {
+        return validation == null ? RunOptions.Validation.HOLDOUT : validation;
+    }
 
     public record ModelChoice(@NotNull ModelType type, Map<String, Object> params) {
     }

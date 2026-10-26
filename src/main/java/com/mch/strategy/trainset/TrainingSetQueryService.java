@@ -59,7 +59,7 @@ public class TrainingSetQueryService {
         copy.put("assetIds", t.getAssetIds());
         copy.put("featureGroups", t.getFeatureGroups());
         copy.put("includeBarColumns", t.isIncludeBarColumns());
-        copy.put("thresholdPct", t.getThresholdPct());
+        copy.put("label", t.labelSpec().toMap());
         copy.put("trainFrom", t.getTrainFrom().toString());
         copy.put("trainTo", t.getTrainTo().toString());
         copy.put("valFrom", t.getValFrom().toString());
@@ -85,6 +85,8 @@ public class TrainingSetQueryService {
                 t.getExtraIntervals().stream().map(Intervals::label).toList(),
                 t.getFeatureGroups(),
                 t.getThresholdPct().stripTrailingZeros().toPlainString(),
+                t.labelSpec().text(Intervals.label(t.getDecisionInterval())),
+                t.labelSpec().horizon(),
                 t.getTrainFrom() + " ~ " + t.getTrainTo(),
                 t.getValFrom() + " ~ " + t.getValTo(),
                 t.getTestFrom() + " ~ " + t.getTestTo(),

@@ -60,6 +60,19 @@ public class ModelRun {
     @Column(name = "early_stopping", nullable = false, length = 20)
     private RunOptions.EarlyStopping earlyStopping;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private RunOptions.Validation validation;
+
+    @Column(nullable = false)
+    private int folds;
+
+    @Column(name = "first_train_fraction")
+    private Double firstTrainFraction;
+
+    @Column(name = "rolling_days")
+    private Integer rollingDays;
+
     @Column(nullable = false)
     private int seed;
 
@@ -89,6 +102,18 @@ public class ModelRun {
     private Double valLogLoss;
     @Column(name = "val_baseline_macro_f1")
     private Double valBaselineMacroF1;
+    @Column(name = "val_fold_f1_mean")
+    private Double valFoldF1Mean;
+    @Column(name = "val_fold_f1_std")
+    private Double valFoldF1Std;
+    @Column(name = "val_fold_f1_min")
+    private Double valFoldF1Min;
+    @Column(name = "val_net_return")
+    private Double valNetReturn;
+    @Column(name = "val_max_drawdown")
+    private Double valMaxDrawdown;
+    @Column(name = "val_trades")
+    private Integer valTrades;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "test_status", nullable = false, length = 20)
@@ -101,6 +126,12 @@ public class ModelRun {
     private Double testMacroF1;
     @Column(name = "test_log_loss")
     private Double testLogLoss;
+    @Column(name = "test_net_return")
+    private Double testNetReturn;
+    @Column(name = "test_max_drawdown")
+    private Double testMaxDrawdown;
+    @Column(name = "test_trades")
+    private Integer testTrades;
     @Column(name = "test_run_count", nullable = false)
     private int testRunCount;
     @Column(name = "test_evaluated_at")
@@ -124,6 +155,7 @@ public class ModelRun {
 
     public static ModelRun create(String name, long trainingSetId, ModelType type, Map<String, Object> params,
                                   RunOptions.TrainUnit unit, RunOptions.Balance balance, RunOptions.EarlyStopping earlyStopping,
+                                  RunOptions.Validation validation, int folds, Double firstTrainFraction, Integer rollingDays,
                                   int seed, int maxTrainRows, boolean permutationImportance, String memo) {
         ModelRun r = new ModelRun();
         r.name = name;
@@ -133,6 +165,10 @@ public class ModelRun {
         r.trainUnit = unit;
         r.balance = balance;
         r.earlyStopping = earlyStopping;
+        r.validation = validation;
+        r.folds = validation.isWalkForward() ? folds : 1;
+        r.firstTrainFraction = validation.isWalkForward() ? firstTrainFraction : null;
+        r.rollingDays = validation == RunOptions.Validation.WALK_FORWARD_ROLLING ? rollingDays : null;
         r.seed = seed;
         r.maxTrainRows = maxTrainRows;
         r.permutationImportance = permutationImportance;
@@ -161,7 +197,17 @@ public class ModelRun {
         this.status = ModelRunStatus.RUNNING;
     }
 
-    public void trained(Scores train, Scores val, Double baselineMacroF1, double seconds) {
+    public void trained(Scores train, Scores val, Double baselineMacroF1, FoldStats folds, Backtester.Summary trade, double seconds) {
+        if (folds != null) {
+            this.valFoldF1Mean = folds.mean();
+            this.valFoldF1Std = folds.std();
+            this.valFoldF1Min = folds.min();
+        }
+        if (trade != null) {
+            this.valNetReturn = trade.netReturnPct();
+            this.valMaxDrawdown = trade.maxDrawdownPct();
+            this.valTrades = trade.trades();
+        }
         this.status = ModelRunStatus.READY;
         this.trainAccuracy = train.accuracy();
         this.trainMacroF1 = train.macroF1();
@@ -183,7 +229,12 @@ public class ModelRun {
         this.testStatus = TestStatus.RUNNING;
     }
 
-    public void tested(Scores test) {
+    public void tested(Scores test, Backtester.Summary trade) {
+        if (trade != null) {
+            this.testNetReturn = trade.netReturnPct();
+            this.testMaxDrawdown = trade.maxDrawdownPct();
+            this.testTrades = trade.trades();
+        }
         this.testStatus = TestStatus.DONE;
         this.testAccuracy = test.accuracy();
         this.testBalancedAccuracy = test.balancedAccuracy();
@@ -196,6 +247,10 @@ public class ModelRun {
     public void testFailed(String message) {
         this.testStatus = TestStatus.FAILED;
         this.message = "최종 테스트 실패: " + message;
+    }
+
+    /** 워크포워드 폴드별 검증 Macro F1 요약 */
+    public record FoldStats(Double mean, Double std, Double min) {
     }
 
     /** 목록에 저장하는 요약 점수 */
