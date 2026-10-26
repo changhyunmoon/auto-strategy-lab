@@ -36,6 +36,14 @@ dependencies {
     implementation 'org.flywaydb:flyway-mysql'
     runtimeOnly 'com.mysql:mysql-connector-j'
 
+    // 모델 학습 (로지스틱 회귀 · 결정트리 · 랜덤 포레스트 · 그래디언트 부스팅).
+    // 4.4.x 가 JDK 21 로 빌드된 마지막 버전이다. 이 PC 는 Windows 스마트 앱 컨트롤이 서명 없는 DLL 을 막으므로
+    // 네이티브 라이브러리(OpenBLAS · DuckDB)는 빼고 순수 Java 로 동작하는 모델만 쓴다.
+    implementation('com.github.haifengl:smile-core:4.4.2') {
+        exclude group: 'org.bytedeco'
+        exclude group: 'org.duckdb'
+    }
+
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'

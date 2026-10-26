@@ -42,6 +42,8 @@ public class JobService {
         return Map.of(
                 "id", job.getId(),
                 "datasetId", job.getDatasetId() == null ? 0 : job.getDatasetId(),
+                "targetId", job.getTargetId() == null ? 0 : job.getTargetId(),
+                "type", job.getJobType(),
                 "status", job.getStatus().name(),
                 "progress", job.getProgress(),
                 "step", job.getStep() == null ? "" : job.getStep(),

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${r.summary.name}">실험</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/runs(trainingSetId=${r.summary.trainingSetId})}">🧪 실험 결과</a><span class="sep">/</span>
+  <span class="crumb current" th:text="${r.summary.name}">이름</span>
+  <span class="topbar-actions">
+    <a class="btn btn-ghost btn-sm" th:href="@{/training(copy=${r.summary.id})}">같은 설정으로 다시</a>
+    <button class="btn btn-danger-ghost btn-sm" id="deleteBtn" th:unless="${r.summary.busy}">삭제</button>
+  </span>
+</div>
+
+<div layout:fragment="content" class="page" style="max-width:1180px" id="runPage"
+     th:data-id="${r.summary.id}" th:data-status="${r.summary.status}" th:data-test-status="${r.summary.testStatus}"
+     th:data-job="${r.summary.jobId}" th:data-test-job="${r.summary.testJobId}" th:data-name="${r.summary.name}"
+     th:data-test-count="${r.summary.testRunCount}">
+  <div class="page-head">
+    <div class="page-icon">🧪</div>
+    <h1 class="page-title" th:text="${r.summary.name}">이름</h1>
+  </div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label"><span class="prop-icon">◉</span>상태</div>
+      <div class="prop-value">
+        <span class="tag" th:classappend="${r.summary.status == 'READY'} ? 'tag-green' : (${r.summary.status == 'FAILED'} ? 'tag-red' : 'tag-blue')">
+          <span class="dot"></span><th:block th:text="${r.summary.statusLabel}">완료</th:block></span>
+        <span class="tag" th:if="${r.summary.testStatus == 'DONE'}" th:classappend="'tag-yellow'"
+              th:text="${'최종 테스트 ' + r.summary.testRunCount + '회 · ' + r.summary.testEvaluatedAt}">테스트</span>
+        <span class="small" style="color:var(--tag-red-fg)" th:if="${!#strings.isEmpty(r.summary.message)}" th:text="${r.summary.message}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🧠</span>모델</div>
+      <div class="prop-value"><span class="tag tag-blue" th:text="${r.summary.modelLabel}">모델</span>
+        <span class="muted small" th:text="${r.modelDescription}"></span></div>
+    </div>
+    <div class="prop" th:unless="${r.params.isEmpty()}"><div class="prop-label"><span class="prop-icon">⚙️</span>모델 설정</div>
+      <div class="prop-value"><span class="tag" th:each="p : ${r.params}" th:text="${p.label + ' ' + p.value}">설정</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🏷️</span>학습 데이터</div>
+      <div class="prop-value">
+        <a class="link" th:href="@{/trainsets/{id}(id=${r.summary.trainingSetId})}" th:text="${r.summary.trainingSetName}">학습 데이터</a>
+        <span class="muted small" th:text="${#strings.listJoin(r.assets, '·') + ' · ' + r.interval + ' · 정답 ±' + r.thresholdPct + '%'}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">📅</span>구간 (UTC)</div>
+      <div class="prop-value small num">
+        <span th:text="${'학습 ' + r.trainPeriod}"></span> · <span th:text="${'검증 ' + r.valPeriod}"></span> · <span th:text="${'테스트 ' + r.testPeriod}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🧩</span>학습 방법</div>
+      <div class="prop-value">
+        <span class="tag" th:text="${r.summary.trainUnit}" th:title="${r.trainUnitDescription}">자산별</span>
+        <span class="tag" th:text="${'불균형 ' + r.summary.balance}" th:title="${r.balanceDescription}">불균형</span>
+        <span class="tag" th:text="${'조기 종료 ' + r.earlyStopping}">조기 종료</span>
+        <span class="tag" th:text="${'표본 상한 ' + #numbers.formatInteger(r.summary.maxTrainRows, 1, 'COMMA')}">상한</span>
+        <span class="tag" th:text="${'시드 ' + r.summary.seed}">시드</span>
+      </div>
+    </div>
+    <div class="prop" th:if="${!#strings.isEmpty(r.memo)}"><div class="prop-label"><span class="prop-icon">📝</span>메모</div>
+      <div class="prop-value" th:text="${r.memo}"></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🕒</span>생성</div>
+      <div class="prop-value"><th:block th:text="${r.summary.createdAt}"></th:block>
+        <span class="muted small" th:if="${r.summary.trainSeconds != null}" th:text="${'· 소요 ' + #numbers.formatDecimal(r.summary.trainSeconds, 1, 1) + '초'}"></span></div>
+    </div>
+  </div>
+
+  <div id="trainProgress" style="display:none;margin-top:24px">
+    <div class="progress-thin"><span id="trainBar"></span></div>
+    <div class="small muted" style="margin-top:6px" id="trainText"></div>
+  </div>
+
+  <div data-tabs-scope style="margin-top:28px" th:if="${r.summary.status == 'READY'}">
+    <div class="tabs">
+      <div class="tab active" data-tab="val">📙 검증 결과</div>
+      <div class="tab" data-tab="test">📕 최종 테스트</div>
+      <div class="tab" data-tab="importance">🔀 변수 중요도</div>
+      <div class="tab" data-tab="info">📋 학습 정보</div>
+    </div>
+
+    <div class="tab-panel active" data-panel="val">
+      <div id="valResult"><div class="empty">결과를 불러오는 중…</div></div>
+    </div>
+
+    <div class="tab-panel" data-panel="test">
+      <div class="callout callout-yellow" id="testIntro">
+        <div class="callout-icon">🔒</div>
+        <div class="callout-body">
+          <b>최종 테스트는 모델 · 설정 고르기를 마친 뒤 한 번만 확인하는 구간입니다.</b>
+          <div class="small" style="margin-top:4px">
+            결과를 보고 설정을 바꿔 다시 고르면 그 테스트 구간은 더 이상 「처음 보는 데이터」가 아닙니다.
+            실행 횟수와 시각이 기록되고 목록에 표시됩니다. 저장된 모델을 그대로 써서 평가하며, 다시 학습하지 않습니다.
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" id="testBtn">최종 테스트 실행</button>
+            <span class="small muted" id="testCountText"></span>
+          </div>
+        </div>
+      </div>
+      <div id="testProgress" style="display:none;margin-top:14px">
+        <div class="progress-thin"><span id="testBar"></span></div>
+        <div class="small muted" style="margin-top:6px" id="testText"></div>
+      </div>
+      <div id="testResult" style="margin-top:8px"></div>
+    </div>
+
+    <div class="tab-panel" data-panel="importance">
+      <div id="importanceBox"></div>
+    </div>
+
+    <div class="tab-panel" data-panel="info">
+      <div id="infoBox"></div>
+      <div style="margin-top:18px;display:flex;gap:8px">
+        <a class="btn btn-ghost btn-sm" th:href="@{/api/runs/{id}/predictions(id=${r.summary.id},split='val')}">⬇ 검증 예측 CSV</a>
+        <a class="btn btn-ghost btn-sm" id="testCsv" style="display:none" th:href="@{/api/runs/{id}/predictions(id=${r.summary.id},split='test')}">⬇ 최종 테스트 예측 CSV</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script th:src="@{/js/echarts-theme.js}"></script>
+  <script th:src="@{/js/run-result.js}"></script>
+  <script th:src="@{/js/run-detail.js}"></script>
+</th:block>
+</body>
+</html>

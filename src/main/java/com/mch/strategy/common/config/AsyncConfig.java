@@ -20,7 +20,7 @@ public class AsyncConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(1);
-        executor.setQueueCapacity(20);
+        executor.setQueueCapacity(500); // 모델 여러 개를 한 번에 고르면 실험이 차례로 쌓인다
         executor.setThreadNamePrefix("job-");
         executor.initialize();
         return executor;

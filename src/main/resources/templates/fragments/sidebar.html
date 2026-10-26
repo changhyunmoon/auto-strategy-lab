@@ -8,9 +8,10 @@
   <a class="nav-item" th:classappend="${menu == 'datasets'} ? 'active'" th:href="@{/datasets}"><span class="nav-icon">🗂️</span>데이터세트</a>
   <a class="nav-item" th:classappend="${menu == 'viz'} ? 'active'" th:href="@{/viz}"><span class="nav-icon">📊</span>시각화</a>
   <a class="nav-item" th:classappend="${menu == 'instruments'} ? 'active'" th:href="@{/instruments}"><span class="nav-icon">🪙</span>종목 관리</a>
-  <div class="sidebar-section">다음 단계</div>
-  <a class="nav-item disabled"><span class="nav-icon">⚙️</span>데이터 가공<span class="soon">예정</span></a>
-  <a class="nav-item disabled"><span class="nav-icon">🧠</span>모델 학습<span class="soon">예정</span></a>
+  <div class="sidebar-section">모델</div>
+  <a class="nav-item" th:classappend="${menu == 'trainsets'} ? 'active'" th:href="@{/trainsets}"><span class="nav-icon">🏷️</span>학습 데이터</a>
+  <a class="nav-item" th:classappend="${menu == 'training'} ? 'active'" th:href="@{/training}"><span class="nav-icon">🧠</span>모델 학습</a>
+  <a class="nav-item" th:classappend="${menu == 'runs'} ? 'active'" th:href="@{/runs}"><span class="nav-icon">🧪</span>실험 결과</a>
   <div class="sidebar-footer">시각은 KST로 표시</div>
 </aside>
 </body>

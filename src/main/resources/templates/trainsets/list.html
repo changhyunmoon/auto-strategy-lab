@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>학습 데이터</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🏷️ 학습 데이터</span></div>
+
+<div layout:fragment="content" class="page page--wide" style="max-width:1300px">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🏷️</div>
+      <h1 class="page-title">학습 데이터</h1>
+      <div class="page-desc">데이터세트에서 기간 · 정답 기준 · 학습/검증/테스트 날짜를 정해 만든 모델 학습용 데이터입니다.</div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-primary" th:href="@{/trainsets/new}">＋ 새로 만들기</a>
+    </div>
+  </div>
+
+  <div class="db-table-wrap">
+    <table class="db-table" id="setTable">
+      <thead>
+      <tr>
+        <th><span class="th-icon">Aa</span>이름</th>
+        <th><span class="th-icon">◉</span>상태</th>
+        <th><span class="th-icon">🗂️</span>기준 데이터세트</th>
+        <th><span class="th-icon">🪙</span>종목</th>
+        <th><span class="th-icon">⏱️</span>판단 간격</th>
+        <th class="num"><span class="th-icon">%</span>정답 기준</th>
+        <th><span class="th-icon">📅</span>학습 / 검증 / 테스트 (UTC)</th>
+        <th class="num"><span class="th-icon">#</span>행 × 열</th>
+        <th class="num"><span class="th-icon">🧪</span>실험</th>
+        <th><span class="th-icon">🕒</span>생성 (KST)</th>
+        <th></th>
+      </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="empty" id="emptyBox" style="display:none">
+    <div class="empty-icon">🏷️</div>
+    아직 학습 데이터가 없습니다. <a class="link" th:href="@{/trainsets/new}">새로 만들기</a>에서 데이터세트를 골라 만들어 보세요.
+  </div>
+  <div id="failNotes"></div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:src="@{/js/trainsets.js}"></script>
+</th:block>
+</body>
+</html>

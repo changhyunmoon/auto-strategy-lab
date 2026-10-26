@@ -10,4 +10,6 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     List<Job> findByStatus(JobStatus status);
 
     Optional<Job> findFirstByDatasetIdOrderByIdDesc(Long datasetId);
+
+    Optional<Job> findFirstByJobTypeAndTargetIdOrderByIdDesc(String jobType, Long targetId);
 }

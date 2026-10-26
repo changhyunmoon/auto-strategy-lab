@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${t.summary.name}">학습 데이터</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/trainsets}">🏷️ 학습 데이터</a><span class="sep">/</span>
+  <span class="crumb current" th:text="${t.summary.name}">이름</span>
+  <span class="topbar-actions">
+    <a class="btn btn-ghost btn-sm" th:href="@{/trainsets/new(copy=${t.summary.id})}">같은 설정으로 새로 만들기</a>
+    <button class="btn btn-danger-ghost btn-sm" id="deleteBtn" th:unless="${t.summary.building}">삭제</button>
+  </span>
+</div>
+
+<div layout:fragment="content" class="page" style="max-width:1100px" id="setPage"
+     th:data-id="${t.summary.id}" th:data-job="${t.summary.jobId}" th:data-building="${t.summary.building}"
+     th:data-name="${t.summary.name}" th:data-runs="${t.summary.runCount}"
+     th:data-train="${t.summary.trainPeriod}" th:data-val="${t.summary.valPeriod}" th:data-test="${t.summary.testPeriod}">
+  <div class="page-head">
+    <div class="page-icon">🏷️</div>
+    <h1 class="page-title" th:text="${t.summary.name}">이름</h1>
+  </div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label"><span class="prop-icon">◉</span>상태</div>
+      <div class="prop-value">
+        <span class="tag" th:classappend="${t.summary.status == 'READY'} ? 'tag-green' : (${t.summary.status == 'FAILED'} ? 'tag-red' : 'tag-blue')">
+          <span class="dot"></span><th:block th:text="${t.summary.statusLabel}">완료</th:block></span>
+        <span class="small" style="color:var(--tag-red-fg)" th:if="${t.summary.status == 'FAILED'}" th:text="${t.summary.message}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🗂️</span>기준 데이터세트</div>
+      <div class="prop-value"><a class="link" th:href="@{/datasets/{id}(id=${t.summary.datasetId})}" th:text="${t.summary.datasetName}">데이터세트</a></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
+      <div class="prop-value"><span class="tag" th:each="a : ${t.summary.assets}" th:text="${a}">BTC</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">⏱️</span>판단 간격</div>
+      <div class="prop-value"><span class="tag" th:text="${t.summary.interval}">1분</span>
+        <span class="muted small" th:unless="${t.summary.extraIntervals.isEmpty()}" th:text="${'+ ' + #strings.listJoin(t.summary.extraIntervals, '·') + ' 지표 (완성 봉만)'}"></span>
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🎯</span>정답</div>
+      <div class="prop-value">다음 봉 종가 수익률 <span class="tag tag-blue" th:text="${'±' + t.summary.thresholdPct + '%'}">±0.3%</span> 기준 상승 · 중립 · 하락</div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">📊</span>입력 지표</div>
+      <div class="prop-value"><span class="tag" th:each="g : ${t.featureGroupLabels}" th:text="${g}">A</span>
+        <span class="muted small" th:if="${t.includeBarColumns}">+ 봉 원값</span></div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">#</span>크기</div>
+      <div class="prop-value" th:if="${t.summary.status == 'READY'}">
+        <span class="num" th:text="${#numbers.formatInteger(t.summary.rowCount, 1, 'COMMA')}">0</span>행 ×
+        <span class="num" th:text="${t.summary.columnCount}">0</span>열
+      </div>
+    </div>
+    <div class="prop"><div class="prop-label"><span class="prop-icon">🕒</span>생성</div>
+      <div class="prop-value" th:text="${t.summary.createdAt}"></div>
+    </div>
+  </div>
+
+  <div th:if="${t.summary.building}" style="margin-top:24px" id="buildingBox">
+    <div class="progress-thin"><span id="progressBar" th:style="${'width:' + t.summary.progress + '%'}"></span></div>
+    <div class="small muted" style="margin-top:6px" id="progressText" th:text="${t.summary.progress + '% · ' + t.summary.step}"></div>
+  </div>
+
+  <div style="margin:20px 0 4px;display:flex;gap:8px" th:if="${t.summary.status == 'READY'}">
+    <a class="btn btn-primary" th:href="@{/training(trainingSetId=${t.summary.id})}">🧠 이 데이터로 모델 학습</a>
+    <a class="btn btn-ghost" th:href="@{/runs(trainingSetId=${t.summary.id})}" th:if="${t.summary.runCount > 0}"
+       th:text="${'🧪 실험 결과 ' + t.summary.runCount + '개'}">실험</a>
+  </div>
+
+  <th:block th:if="${t.summary.status == 'READY'}">
+    <h2 class="section-title">구간</h2>
+    <div class="timeline" id="timeline"></div>
+    <div class="db-table-wrap" style="margin-top:10px">
+      <table class="db-table" id="splitTable">
+        <thead><tr><th>구간</th><th>날짜 (UTC)</th><th>실제 첫 행 ~ 끝 행 (KST)</th><th class="num">행</th><th>자산별</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">정답 분포 <span class="count">학습 · 검증 구간만 (최종 테스트 구간은 열어보지 않음)</span></h2>
+    <div class="toolbar"><span class="chip-group" id="distAsset"></span></div>
+    <div class="chart chart--sm" id="distChart"></div>
+    <details class="help"><summary>ⓘ 읽는 법</summary><div class="help-body">
+      <p><b>무엇을 알 수 있나:</b> 학습 · 검증 구간에서 상승 · 중립 · 하락이 각각 몇 %인지. 중립이 대부분이면 「항상 중립」만으로도 정확도가 높게 나옵니다.</p>
+      <p><b>주의:</b> 상승 · 하락이 너무 적으면(수백 건 이하) 어떤 모델도 의미 있게 비교하기 어렵습니다. 그럴 땐 정답 기준 %를 낮춰 새로 만드는 것을 고려하세요.</p>
+    </div></details>
+
+    <h3 style="font-size:15px;font-weight:600;margin-top:20px">다른 정답 기준이었다면 <span class="small muted" style="font-weight:400">같은 행을 기준 %만 바꿔 셌을 때의 비율 (전체 자산)</span></h3>
+    <div class="db-table-wrap">
+      <table class="db-table db-table--compact" id="thresholdTable"></table>
+    </div>
+
+    <h2 class="section-title">제외한 행</h2>
+    <div class="db-table-wrap">
+      <table class="db-table db-table--compact" id="excludedTable">
+        <thead><tr><th>사유</th><th class="num">행</th><th>설명</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">입력 열 <span class="count" th:text="${t.columns.size() + '개 · 파일 열 순서'}"></span></h2>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">
+      <span class="tag mono" th:each="c : ${t.columns}" th:text="${c}">rsi_14</span>
+    </div>
+  </th:block>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script th:src="@{/js/echarts-theme.js}"></script>
+  <script th:inline="javascript">
+    var STATS = /*[[${t.stats}]]*/ {};
+  </script>
+  <script th:src="@{/js/trainset-detail.js}"></script>
+</th:block>
+</body>
+</html>

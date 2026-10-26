@@ -265,3 +265,55 @@
   .prop { flex-direction: column; }
   .prop-label { width: auto; }
 }
+
+/* ---------- 모델 화면: 요약 카드 · 읽는 법 · 기간 타임라인 · 모델 카드 ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin: 8px 0 4px; }
+.card-stat { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.card-stat .label { font-size: 12px; color: var(--text-secondary); display: flex; gap: 4px; align-items: center; }
+.card-stat .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.card-stat .sub { font-size: 12px; color: var(--text-tertiary); }
+.card-stat .sub.good { color: var(--tag-green-fg); }
+.card-stat .sub.bad { color: var(--tag-red-fg); }
+
+.help { margin: 2px 0 10px; }
+.help > summary { list-style: none; cursor: pointer; font-size: 12.5px; color: var(--text-secondary); display: inline-flex; gap: 4px; align-items: center; padding: 2px 6px; border-radius: var(--radius-sm); }
+.help > summary::-webkit-details-marker { display: none; }
+.help > summary:hover { background: var(--bg-hover); }
+.help-body { font-size: 13px; color: var(--text-secondary); background: var(--bg-sidebar); border-radius: var(--radius); padding: 10px 14px; margin-top: 4px; }
+.help-body b { color: var(--text); font-weight: 600; }
+.help-body p { margin: 0 0 4px; }
+
+.timeline { display: flex; height: 30px; border-radius: var(--radius-sm); overflow: hidden; margin: 6px 0 2px; background: var(--bg-hover); }
+.timeline .seg { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; min-width: 2px; }
+.timeline .seg-train { background: var(--tag-blue-bg); color: var(--tag-blue-fg); }
+.timeline .seg-val { background: var(--tag-yellow-bg); color: var(--tag-yellow-fg); }
+.timeline .seg-test { background: var(--tag-red-bg); color: var(--tag-red-fg); }
+.timeline .seg-gap { background: repeating-linear-gradient(45deg, #f1f1ef, #f1f1ef 4px, #fff 4px, #fff 8px); }
+.timeline-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono); }
+
+.model-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.model-card + .model-card { margin-top: 6px; }
+.model-card:has(> .model-head input:checked) { border-color: #b9daf2; background: #fbfdff; }
+.model-head { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.model-head .form-check-input { margin-top: 3px; flex-shrink: 0; }
+.model-head .model-name { font-weight: 600; }
+.model-head .model-desc { font-size: 12.5px; color: var(--text-secondary); }
+.model-head .model-tags { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
+.model-params { display: none; margin: 8px 0 2px 26px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 14px; }
+.model-card.open .model-params { display: grid; }
+.model-params label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 2px; }
+.model-params .form-control { width: 100%; }
+.param-toggle { font-size: 12px; color: var(--text-secondary); margin-left: 26px; cursor: pointer; padding: 1px 4px; border-radius: var(--radius-sm); }
+.param-toggle:hover { background: var(--bg-hover); }
+
+.metric-null { color: var(--text-tertiary); font-style: italic; }
+.result-section { margin-top: 28px; }
+.result-section > h3 { font-size: 15px; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; }
+.result-section > h3 .count { font-size: 12.5px; font-weight: 400; color: var(--text-secondary); }
+.chart--md { height: 380px; }
+.chart--cm { height: 340px; max-width: 460px; }
+.diff-up { color: var(--tag-green-fg); }
+.diff-down { color: var(--tag-red-fg); }
+#runTable td:first-child { min-width: 220px; }
+#runTable td, #runTable th { white-space: nowrap; }
+#runTable td:first-child { white-space: normal; }

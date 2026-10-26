@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>학습 데이터 만들기</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/trainsets}">🏷️ 학습 데이터</a><span class="sep">/</span>
+  <span class="crumb current">새로 만들기</span>
+</div>
+
+<div layout:fragment="content" class="page" style="max-width:960px">
+  <div th:replace="~{fragments/ui :: pageHead('🏷️', '학습 데이터 만들기', '받아 둔 데이터세트를 다시 쓰고, 정답 기준과 학습 · 검증 · 최종 테스트 날짜를 정합니다. 원본을 다시 받지 않습니다.')}"></div>
+
+  <div class="empty" th:if="${datasets.isEmpty()}">
+    <div class="empty-icon">🗂️</div>
+    완료된 데이터세트가 없습니다. <a class="link" th:href="@{/collect}">데이터 가져오기</a>에서 먼저 만들어 주세요.
+  </div>
+
+  <form id="setForm" onsubmit="return false;" th:unless="${datasets.isEmpty()}">
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🗂️</span>기준 데이터세트</div>
+        <div class="prop-value">
+          <select class="form-select" id="datasetSel" style="min-width:320px">
+            <option th:each="d : ${datasets}" th:value="${d.id}" th:text="${d.name + '  (' + d.from + ' ~ ' + d.to + ')'}"
+                    th:selected="${datasetId != null and datasetId == d.id}">데이터세트</option>
+          </select>
+          <div class="hint" id="datasetHint"></div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
+        <div class="prop-value chip-group" id="assetChips"></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">⏱️</span>판단 간격</div>
+        <div class="prop-value">
+          <span class="chip-group" id="intervalChips"></span>
+          <div class="hint">한 행 = 이 간격의 봉 하나에서 내리는 판단입니다. 정답은 바로 다음 봉의 종가 변화입니다.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">➕</span>함께 붙일 간격</div>
+        <div class="prop-value">
+          <span class="chip-group" id="extraChips"></span>
+          <div class="hint">더 긴 간격의 지표를 붙입니다. 판단 시각에 <b>이미 끝난</b> 봉의 값만 씁니다 (진행 중인 봉은 쓰지 않음).</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📊</span>입력 지표</div>
+        <div class="prop-value">
+          <span class="chip-group" id="groupChips"></span>
+          <label class="small muted" style="display:flex;gap:6px;align-items:center;cursor:pointer;width:100%;margin-top:4px">
+            <input type="checkbox" class="form-check-input" style="margin:0" id="includeBar">봉 원값(시고저종 · 거래량)도 입력에 넣기
+          </label>
+          <div class="hint">가격 수준 자체는 기간마다 크게 달라 기본은 뺍니다. 정답 계산에는 항상 종가를 씁니다.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🎯</span>정답 기준</div>
+        <div class="prop-value">
+          <span class="chip-group">
+            <label class="chip" th:each="t, st : ${thresholds}">
+              <input type="radio" name="threshold" th:value="${t}" th:checked="${t == 0.3}"><th:block th:text="${'±' + t + '%'}">±0.3%</th:block>
+            </label>
+          </span>
+          <div class="hint">다음 봉 종가 수익률이 +기준 이상이면 <b>상승</b>, −기준 이하면 <b>하락</b>, 그 사이는 <b>중립</b>입니다. 비용 반영 매매 수익과는 다릅니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">기간 나누기 <span class="count">UTC 날짜 · 끝 날짜 하루 전체 포함 · 학습 → 검증 → 테스트 순서, 겹치지 않게</span></h2>
+    <div class="toolbar">
+      <span class="small muted">빠른 선택</span>
+      <span class="chip-group">
+        <label class="chip"><input type="radio" name="preset" value="r60">비율 60 · 20 · 20</label>
+        <label class="chip"><input type="radio" name="preset" value="r70">70 · 15 · 15</label>
+        <label class="chip"><input type="radio" name="preset" value="r50">50 · 25 · 25</label>
+      </span>
+      <span class="small muted" style="margin-left:10px">테스트 = 마지막</span>
+      <span class="chip-group">
+        <label class="chip"><input type="radio" name="preset" value="m1">1개월</label>
+        <label class="chip"><input type="radio" name="preset" value="m3">3개월</label>
+        <label class="chip"><input type="radio" name="preset" value="m6">6개월</label>
+        <label class="chip"><input type="radio" name="preset" value="m12">1년</label>
+      </span>
+    </div>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📘</span>학습</div>
+        <div class="prop-value"><span class="date-range">
+          <input type="date" class="form-control period" id="trainFrom"><span class="muted">→</span><input type="date" class="form-control period" id="trainTo">
+        </span><span class="small muted" id="trainDays"></span></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📙</span>검증</div>
+        <div class="prop-value"><span class="date-range">
+          <input type="date" class="form-control period" id="valFrom"><span class="muted">→</span><input type="date" class="form-control period" id="valTo">
+        </span><span class="small muted" id="valDays"></span></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📕</span>최종 테스트</div>
+        <div class="prop-value"><span class="date-range">
+          <input type="date" class="form-control period" id="testFrom"><span class="muted">→</span><input type="date" class="form-control period" id="testTo">
+        </span><span class="small muted" id="testDays"></span></div>
+      </div>
+    </div>
+    <div class="timeline" id="timeline"></div>
+    <div class="timeline-legend"><span id="tlStart"></span><span id="tlEnd"></span></div>
+    <div class="callout callout-yellow" style="margin-top:10px;display:none" id="periodWarn"><div class="callout-icon">⚠️</div><div class="callout-body small" id="periodWarnText"></div></div>
+    <div class="callout" style="margin-top:10px">
+      <div class="callout-icon">🔒</div>
+      <div class="callout-body small">
+        <b>최종 테스트 구간</b>은 모델 · 설정을 다 고른 뒤 한 번만 확인하는 구간입니다. 이 화면과 상세 화면에서는 테스트 구간의 정답 분포를 보여주지 않습니다.
+        다음 봉이 구간 끝을 넘어가는 행, 빈 구간 바로 앞의 행은 빼고 사유를 기록합니다.
+      </div>
+    </div>
+
+    <div class="props" style="margin-top:20px">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🏷️</span>이름</div>
+        <div class="prop-value"><input type="text" class="form-control grow" id="setName" maxlength="100"></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;align-items:center">
+      <button type="button" class="btn btn-primary" id="submitBtn">만들기</button>
+      <span class="small muted">행 수가 많으면 몇 분 걸릴 수 있습니다.</span>
+    </div>
+
+    <div id="progressBox" style="display:none;margin-top:20px">
+      <div class="progress-thin"><span id="progressBar"></span></div>
+      <div class="small muted" style="margin-top:6px" id="progressText"></div>
+      <div class="callout callout-red" style="margin-top:10px;display:none" id="failBox"><div class="callout-icon">⚠️</div><div class="callout-body" id="failText"></div></div>
+    </div>
+  </form>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var DATASETS = /*[[${datasets}]]*/ [];
+    var GROUPS = /*[[${groups}]]*/ [];
+    var COPY = /*[[${copy}]]*/ null;
+  </script>
+  <script th:src="@{/js/trainset-new.js}"></script>
+</th:block>
+</body>
+</html>

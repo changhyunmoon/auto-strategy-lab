@@ -22,6 +22,9 @@ import lombok.NoArgsConstructor;
 public class Job {
 
     public static final String TYPE_DATASET_BUILD = "DATASET_BUILD";
+    public static final String TYPE_TRAINSET_BUILD = "TRAINSET_BUILD";
+    public static final String TYPE_MODEL_TRAIN = "MODEL_TRAIN";
+    public static final String TYPE_MODEL_TEST = "MODEL_TEST";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,6 +35,10 @@ public class Job {
 
     @Column(name = "dataset_id")
     private Long datasetId;
+
+    /** 데이터세트가 아닌 작업의 대상 (학습 데이터 id · 실험 id) */
+    @Column(name = "target_id")
+    private Long targetId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -64,6 +71,17 @@ public class Job {
         return job;
     }
 
+    /** 학습 데이터 만들기 · 모델 학습 · 최종 테스트처럼 데이터세트가 아닌 대상을 가진 작업 */
+    public static Job forTarget(String type, long targetId) {
+        Job job = new Job();
+        job.jobType = type;
+        job.targetId = targetId;
+        job.status = JobStatus.RUNNING;
+        job.step = "대기";
+        job.createdAt = Instant.now();
+        return job;
+    }
+
     public void start() {
         this.startedAt = Instant.now();
     }
@@ -78,6 +96,7 @@ public class Job {
         this.status = JobStatus.SUCCEEDED;
         this.progress = 100;
         this.step = "완료";
+        this.message = null;
         this.finishedAt = Instant.now();
     }
 

@@ -45,5 +45,25 @@ var App = (function ($) {
     $(document).trigger('tab:shown', [name]);
   });
 
-  return { api: api, toast: toast, formatNumber: formatNumber, toKst: toKst };
+  /** 0~1 비율 → "12.3%". 값이 없으면(계산 불가) "–" */
+  function pct(v, digits) {
+    return v == null || isNaN(v) ? '–' : (v * 100).toFixed(digits == null ? 1 : digits) + '%';
+  }
+
+  /** 숫자 → 고정 소수 자리. 값이 없으면 "–" */
+  function fixed(v, digits) {
+    return v == null || isNaN(v) ? '–' : Number(v).toFixed(digits == null ? 3 : digits);
+  }
+
+  /** epoch ms → KST "YYYY-MM-DD HH:mm" */
+  function msToKst(ms) {
+    return ms == null ? '' : toKst(new Date(ms).toISOString());
+  }
+
+  /** 상태 태그 (green · red · blue · 회색) */
+  function tag(text, color) {
+    return $('<span class="tag"><span class="dot"></span></span>').addClass(color ? 'tag-' + color : '').append(document.createTextNode(text));
+  }
+
+  return { api: api, toast: toast, formatNumber: formatNumber, toKst: toKst, pct: pct, fixed: fixed, msToKst: msToKst, tag: tag };
 })(jQuery);

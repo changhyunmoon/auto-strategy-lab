@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>실험 결과</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🧪 실험 결과</span></div>
+
+<div layout:fragment="content" class="page page--wide" style="max-width:1400px">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🧪</div>
+      <h1 class="page-title">실험 결과</h1>
+      <div class="page-desc">학습 데이터 + 모델 조합마다 하나씩 만들어진 실험입니다. 같은 학습 데이터끼리 검증 점수로 비교합니다.</div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-primary" th:href="@{/training}" id="newRunLink">＋ 모델 학습</a>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <span class="small muted">학습 데이터</span>
+    <select class="form-select" id="setFilter" style="width:auto;min-width:300px">
+      <option value="">전체</option>
+      <option th:each="s : ${trainingSets}" th:value="${s.id}" th:text="${s.name + (s.runCount > 0 ? '  (' + s.runCount + ')' : '')}"
+              th:selected="${selectedSetId != null and selectedSetId == s.id}">학습 데이터</option>
+    </select>
+    <span class="chip-group" style="margin-left:8px" id="statusFilter">
+      <label class="chip"><input type="radio" name="status" value="ALL" checked>전체 <span class="chip-sub" data-count="ALL"></span></label>
+      <label class="chip"><input type="radio" name="status" value="READY">완료 <span class="chip-sub" data-count="READY"></span></label>
+      <label class="chip"><input type="radio" name="status" value="RUNNING">진행 · 대기 <span class="chip-sub" data-count="RUNNING"></span></label>
+      <label class="chip"><input type="radio" name="status" value="FAILED">실패 <span class="chip-sub" data-count="FAILED"></span></label>
+    </span>
+  </div>
+
+  <div id="compareBox" style="display:none">
+    <h2 class="section-title" style="margin-top:12px">검증 구간 비교 <span class="count" id="compareCount"></span></h2>
+    <div class="chart chart--md" id="compareChart"></div>
+    <details class="help"><summary>ⓘ 읽는 법</summary><div class="help-body">
+      <p><b>Macro F1:</b> 상승 · 중립 · 하락 각각의 F1(정밀도와 재현율의 조화 평균)을 같은 비중으로 평균한 값입니다. 드문 상승 · 하락을 못 맞히면 크게 낮아집니다. 1차 정렬 기준입니다.</p>
+      <p><b>균형 정확도:</b> 클래스별 재현율(실제 그 클래스를 찾아낸 비율)의 평균입니다. 「항상 중립」은 약 33%가 됩니다.</p>
+      <p><b>점선:</b> 같은 검증 구간에서 「항상 최빈 클래스」의 Macro F1 입니다. 이 선보다 높아야 의미가 있습니다.</p>
+      <p><b>결론 내릴 수 없는 것:</b> 검증 점수가 가장 높은 실험이 미래에도 가장 좋다는 보장은 없습니다. 후보를 고른 뒤 최종 테스트로 확인하세요. 서로 다른 학습 데이터(정답 기준 · 기간)의 점수는 직접 비교하지 않습니다.</p>
+    </div></details>
+  </div>
+  <div class="callout" id="pickSetHint" style="display:none;margin-bottom:12px">
+    <div class="callout-icon">💡</div><div class="callout-body small">학습 데이터를 하나 고르면 같은 조건의 실험끼리 비교 차트가 나타납니다.</div>
+  </div>
+
+  <div class="db-table-wrap">
+    <table class="db-table" id="runTable">
+      <thead>
+      <tr>
+        <th><span class="th-icon">Aa</span>실험</th>
+        <th>모델</th>
+        <th>학습 데이터</th>
+        <th>상태</th>
+        <th class="num sortable" data-sort="valMacroF1" title="검증 Macro F1 (괄호: 최빈 클래스 대비)">검증 Macro F1 ▾</th>
+        <th class="num sortable" data-sort="valBalancedAccuracy">균형 정확도</th>
+        <th class="num sortable" data-sort="valAccuracy">정확도</th>
+        <th class="num sortable" data-sort="valLogLoss" title="낮을수록 좋음">Log loss</th>
+        <th class="num" title="학습 표본 재평가 Macro F1 − 검증 Macro F1. 크면 과적합 의심">학습−검증</th>
+        <th class="num">최종 테스트</th>
+        <th class="num">소요</th>
+        <th>생성 (KST)</th>
+        <th></th>
+      </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="empty" id="emptyBox" style="display:none">
+    <div class="empty-icon">🧪</div>
+    실험이 없습니다. <a class="link" th:href="@{/training}">모델 학습</a>에서 시작해 보세요.
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script th:src="@{/js/echarts-theme.js}"></script>
+  <script th:src="@{/js/runs.js}"></script>
+</th:block>
+</body>
+</html>
