@@ -141,6 +141,40 @@ class BacktesterTest {
     }
 
     @Test
+    void long_only_uses_down_signal_to_exit_and_never_shorts() {
+        // 롱 진입(100) → 하락 신호(110)에서 청산 → 하락 신호가 이어져도 숏으로 들어가지 않는다
+        float[] close = {100, 105, 110, 99, 90};
+        int[] pred = {2, 1, 0, 0, 0};
+        Map<String, Object> r = Backtester.run(oneAsset(close, pred), Backtester.Settings.defaults(0, 0, 10), true);
+        assertThat(total(r).get("trades")).isEqualTo(1);
+        assertThat(total(r).get("shortTrades")).isEqualTo(0L);
+        assertThat(((Number) total(r).get("netReturnPct")).doubleValue()).isCloseTo(10.0, offset(1e-6));
+    }
+
+    @Test
+    void expected_value_rule_enters_only_when_edge_beats_round_trip_cost() {
+        long[] time = {0, M, 2 * M, 3 * M};
+        float[] close = {100, 101, 102, 103};
+        // 기대 수익 = (상승 − 하락) × 기준: 0봉 (0.5 − 0.1) × 0.3 = 0.12% < 왕복 0.14% → 안 삼
+        //                                 1봉 (0.6 − 0.1) × 0.4 = 0.20% > 0.14% → 삼
+        double[][] proba = {{0.1, 0.4, 0.5}, {0.1, 0.3, 0.6}, {0.3, 0.4, 0.3}, {0.3, 0.4, 0.3}};
+        float[] thr = {0.3f, 0.4f, 0.4f, 0.4f};
+        Backtester.Input in = new Backtester.Input(time, new int[4], close, null, null, new int[]{2, 2, 1, 1}, proba, List.of("BTC"), M, thr);
+        Backtester.Settings ev = Backtester.Settings.defaults(0.05, 0.02, 1, true);
+        Map<String, Object> r = Backtester.run(in, ev, true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> trades = (List<Map<String, Object>>) r.get("trades");
+        assertThat(trades).hasSize(1);
+        assertThat(trades.get(0).get("entryTime")).isEqualTo(M);
+
+        // 같은 예측을 클래스 규칙으로 보면 0봉에서 바로 산다
+        Map<String, Object> cls = Backtester.run(in, Backtester.Settings.defaults(0.05, 0.02, 1, false), true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> clsTrades = (List<Map<String, Object>>) cls.get("trades");
+        assertThat(clsTrades.get(0).get("entryTime")).isEqualTo(0L);
+    }
+
+    @Test
     void max_drawdown_is_measured_on_marked_to_market_equity() {
         float[] close = {100, 120, 90, 100};
         int[] pred = {2, 2, 2, 2};

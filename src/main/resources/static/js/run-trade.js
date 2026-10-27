@@ -8,9 +8,15 @@ $(function () {
   var loaded = false;
 
   $('#btHold').val($panel.data('horizon') || 1);
-  if (String($panel.data('proba')) !== 'true') {
-    $('#btProbaChip').addClass('is-disabled').attr('title', '이 모델은 확률을 내지 않아 예측 클래스로만 계산합니다.');
+  var hasProba = String($panel.data('proba')) === 'true';
+  if (!hasProba) {
+    $('.bt-proba-only').addClass('is-disabled').attr('title', '이 모델은 확률을 내지 않아 예측 클래스로만 계산합니다.');
   }
+  // 기본: 확률 모델이면 「기대 수익 > 비용」, 아니면 예측 클래스대로 (학습 직후 기본 거래 성과와 같은 규칙)
+  $('input[name="btRule"][value="' + (hasProba ? 'EV' : 'CLASS') + '"]').prop('checked', true);
+  function rule() { return $('input[name="btRule"]:checked').val(); }
+  function syncRule() { $('.bt-proba').toggle(rule() === 'PROBA'); $('.bt-ev').toggle(rule() === 'EV'); }
+  syncRule();
   function testDone() { return $page.attr('data-test-status') === 'DONE'; }
   function syncTestChip() {
     $('#btTestChip').toggleClass('is-disabled', !testDone()).attr('title', testDone() ? '' : '최종 테스트를 먼저 실행하세요.');
@@ -18,7 +24,7 @@ $(function () {
   syncTestChip();
   $(document).on('test:done', function () { $page.attr('data-test-status', 'DONE'); syncTestChip(); });
 
-  $('input[name="btRule"]').on('change', function () { $('.bt-proba').toggle(this.value === 'proba'); });
+  $('input[name="btRule"]').on('change', syncRule);
   $('input[name="btOrder"]').on('change', function () { $('.bt-limit').toggle(this.value === 'LIMIT'); });
   function isLimit() { return $('input[name="btOrder"]:checked').val() === 'LIMIT'; }
 
@@ -49,12 +55,15 @@ $(function () {
     return c;
   }
 
-  function run() {
+  /** auto = 탭을 처음 열 때 자동 계산 (이때는 화면을 내리지 않는다) */
+  function run(auto) {
     var body = {
       split: $('input[name="btSplit"]:checked').val(),
       feePct: Number($('#btFee').val()),
       slippagePct: Number($('#btSlip').val()),
-      useProbability: $('input[name="btRule"]:checked').val() === 'proba',
+      useProbability: rule() === 'PROBA',
+      rule: rule(),
+      evMarginPct: Number($('#btEvMargin').val()) || 0,
       upThreshold: Number($('#btUp').val()),
       downThreshold: Number($('#btDown').val()),
       holdBars: Number($('#btHold').val()),
@@ -63,9 +72,36 @@ $(function () {
       limitWaitBars: Number($('#btWait').val()) || 1
     };
     $('#btRun').prop('disabled', true).text('계산 중…');
-    App.api('POST', '/api/runs/' + id + '/backtest', body).done(render).always(function () {
+    var $box = $('#btResult');
+    $box.find('.bt-status').remove();
+    $box.css('opacity', 0.45).prepend($('<div class="callout bt-status" style="margin:12px 0"></div>')
+      .append('<div class="callout-icon">⏳</div>').append($('<div class="callout-body small"></div>').text('계산 중… (' + (body.orderType === 'LIMIT' ? '지정가' : '시장가') + ')')));
+    App.api('POST', '/api/runs/' + id + '/backtest', body).done(function (r) {
+      render(r);
+      var t = r.total;
+      $box.prepend($('<div class="callout callout-green bt-status" style="margin:12px 0"></div>')
+        .append('<div class="callout-icon">✅</div>')
+        .append($('<div class="callout-body small"></div>').text('계산했습니다 · ' + (body.orderType === 'LIMIT' ? '지정가 ' + body.limitWaitBars + '봉 대기' : '시장가')
+          + ' · 순수익 ' + pctText(t.netReturnPct) + ' · 거래 ' + App.formatNumber(t.trades) + '번')));
+      if (!auto) scrollToResult();
+    }).fail(function (xhr) {
+      var msg = (xhr.responseJSON && xhr.responseJSON.message) || ('계산하지 못했습니다 (' + xhr.status + ')');
+      $box.find('.bt-status').remove();
+      $box.prepend($('<div class="callout callout-red bt-status" style="margin:12px 0"></div>')
+        .append('<div class="callout-icon">⚠️</div>').append($('<div class="callout-body small"></div>').text(msg)));
+      if (!auto) scrollToResult();
+    }).always(function () {
+      $box.css('opacity', 1);
       $('#btRun').prop('disabled', false).text('계산');
     });
+  }
+
+  /** 결과가 화면 밖에 있으면 그 위치로 내려간다 (설정 칸 아래에 그려져서 안 보일 수 있다) */
+  function scrollToResult() {
+    var top = $('#btResult').offset().top - 60;
+    if (top > window.scrollY + window.innerHeight * 0.6 || top < window.scrollY) {
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
   }
 
   function render(r) {
@@ -75,17 +111,25 @@ $(function () {
     var limit = r.settings.orderType === 'LIMIT';
     var cost = limit ? r.settings.feePct * 2 : (r.settings.feePct + r.settings.slippagePct) * 2;
     var orderText = limit ? '지정가 (' + r.settings.limitWaitBars + '봉 대기)' : '시장가';
+    var ruleName = { EV: '기대 수익 > 비용' + (r.settings.evMarginPct ? ' + 여유 ' + r.settings.evMarginPct + '%' : ''), PROBA: '확률 기준 ' + r.settings.upThreshold, CLASS: '예측 클래스대로' }[r.settings.rule] || '예측 클래스대로';
 
     // ---------- 요약 ----------
-    var $s = section('요약', null, (r.split === 'test' ? '최종 테스트' : '검증') + ' 구간 · ' + orderText + ' · ' + r.horizon + '봉 보유 기준 · 왕복 비용 ' + cost.toFixed(2) + '%'
+    var $s = section('요약', null, (r.split === 'test' ? '최종 테스트' : '검증') + ' 구간 · 롱만 · ' + ruleName + ' · ' + orderText + ' · ' + r.horizon + '봉 보유 기준 · 왕복 비용 ' + cost.toFixed(2) + '%'
       + (limit ? ' (둘 다 지정가로 체결될 때)' : '')).appendTo($box);
+    if (!t.trades) {
+      var why = r.settings.rule === 'EV' ? '기대 수익((상승 확률 − 하락 확률) × 정답 기준)이 왕복 비용 ' + cost.toFixed(2) + '% 를 넘은 봉이 한 번도 없었습니다. 모델의 확신이 비용을 넘을 만큼 크지 않다는 뜻입니다. 여유를 0 으로 두거나, 정답 기준이 더 큰(예측 기간이 긴) 학습 데이터를 써 보세요.'
+        : r.settings.rule === 'PROBA' ? '상승 확률이 ' + r.settings.upThreshold + ' 이상인 봉이 없었습니다. 기준을 낮춰 보세요.'
+        : '모델이 이 구간에서 「상승」을 한 번도 예측하지 않았습니다. 「항상 최빈 클래스」 기준 모델이거나, 정답이 중립에 크게 쏠려 모델이 중립만 고른 경우입니다.';
+      $s.append($('<div class="callout callout-yellow small" style="margin:6px 0"></div>').append('<div class="callout-icon">ℹ️</div>')
+        .append($('<div class="callout-body"></div>').append($('<b></b>').text('거래가 없습니다. ')).append(document.createTextNode(why))));
+    }
     var $cards = $('<div class="cards"></div>').appendTo($s);
     var vsHold = t.netReturnPct - t.buyHoldPct;
     $cards.append(card('netReturn', '순수익률', pctText(t.netReturnPct), '단순 보유 대비 ' + pctText(vsHold).replace('%', '%p'), t.netReturnPct >= 0 ? 'diff-up' : 'diff-down'));
     $cards.append(card('grossReturn', '비용 전 수익률', pctText(t.grossReturnPct), '비용이 ' + (t.grossReturnPct - t.netReturnPct).toFixed(2) + '%p 차감'));
     $cards.append(card('buyHold', '단순 보유', pctText(t.buyHoldPct), '자산별 평균'));
     $cards.append(card('mdd', '최대 낙폭', t.maxDrawdownPct == null ? '–' : '−' + t.maxDrawdownPct.toFixed(2) + '%'));
-    $cards.append(card('trades', '거래 수', App.formatNumber(t.trades), '롱 ' + t.longTrades + ' · 숏 ' + t.shortTrades));
+    $cards.append(card('trades', '거래 수', App.formatNumber(t.trades), '매수 → 매도 한 번이 1건'));
     $cards.append(card('winRate', '승률', App.pct(t.winRate), '비용 차감 후 이익 거래'));
     $cards.append(card('avgTrade', '평균 거래 수익', pctText(t.avgTradeNetPct, 3), '평균 보유 ' + App.fixed(t.avgHoldBars, 1) + '봉'));
     $cards.append(card('exposure', '보유 비율', App.pct(t.exposure), '샤프 ' + App.fixed(t.sharpe, 2) + ' (참고)'));
@@ -97,7 +141,7 @@ $(function () {
     $s.append(help([
       '<b>순수익률</b>은 수수료 · 슬리피지를 뺀 누적 수익률입니다. 같은 기간 <b>단순 보유</b>(처음에 사서 끝까지)보다 나은지 함께 보세요.',
       '<b>비용 전 수익률</b>과의 차이는 거래 비용이 얼마나 갉아먹었는지입니다. 거래가 잦을수록 커집니다.',
-      '롱 합계 ' + pctText(t.longNetPct) + ' · 숏 합계 ' + pctText(t.shortNetPct) + ' (거래별 순수익률의 단순 합). 숏은 현물에서 할 수 없으므로 참고용입니다.',
+      '롱만 계산합니다. 상승 신호에 사고, 보유 중 하락 신호가 나오거나 보유 기간이 끝나면 팝니다.',
       '거래가 수십 번 이하면 수익률은 운에 크게 좌우됩니다.'
     ]));
 
@@ -273,10 +317,10 @@ $(function () {
     return $d;
   }
 
-  $('#btRun').on('click', run);
+  $('#btRun').on('click', function () { run(false); });
   $(document).on('tab:shown', function (e, name) {
     if (name !== 'trade') return;
-    if (!loaded) { loaded = true; run(); }
+    if (!loaded) { loaded = true; run(true); }
     charts.forEach(function (c) { c.resize(); });
   });
   $(window).on('resize', function () { charts.forEach(function (c) { c.resize(); }); });

@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 import smile.base.cart.SplitRule;
-import smile.classification.DecisionTree;
 import smile.classification.GradientTreeBoost;
 import smile.classification.LogisticRegression;
 import smile.classification.RandomForest;
@@ -43,14 +42,8 @@ final class ModelTrainer {
         }
         return switch (type) {
             case BASELINE_MAJORITY -> new UnitModel.Constant(UnitModel.argmax(prior), prior);
-            case BASELINE_STRATIFIED -> new UnitModel.Stratified(prior, seed);
             case BASELINE_PERSISTENCE -> new UnitModel.Persistence();
             case LOGISTIC -> logistic(params, x, y, pre);
-            case DECISION_TREE -> {
-                DecisionTree.Options o = new DecisionTree.Options(SplitRule.GINI,
-                        i(params, "maxDepth"), i(params, "maxNodes"), i(params, "nodeSize"));
-                yield new UnitModel.SmileFrame(DecisionTree.fit(FORMULA, UnitModel.frame(x, y), o), x[0].length);
-            }
             case RANDOM_FOREST -> randomForest(params, x, y, balance, seed, progress);
             case GRADIENT_BOOSTING -> gradientBoosting(params, x, y, stopX, stopY, progress, notes);
         };

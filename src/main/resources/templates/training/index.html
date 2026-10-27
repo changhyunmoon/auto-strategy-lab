@@ -47,7 +47,7 @@
         <div class="prop-value">
           <span class="chip-group">
             <label class="chip" th:each="c, st : ${validations}" th:title="${c.description}">
-              <input type="radio" name="validation" th:value="${c.code}" th:checked="${st.first}"><th:block th:text="${c.label}">한 번 나누기</th:block>
+              <input type="radio" name="validation" th:value="${c.code}" th:checked="${c.code == 'WALK_FORWARD_EXPANDING'}"><th:block th:text="${c.label}">한 번 나누기</th:block>
             </label>
           </span>
           <div class="hint" id="validationHint"></div>
@@ -78,7 +78,7 @@
         <div class="prop-value">
           <span class="chip-group">
             <label class="chip" th:each="c, st : ${trainUnits}" th:title="${c.description}">
-              <input type="radio" name="trainUnit" th:value="${c.code}" th:checked="${st.first}"><th:block th:text="${c.label}">자산별</th:block>
+              <input type="radio" name="trainUnit" th:value="${c.code}" th:checked="${c.code == 'POOLED'}"><th:block th:text="${c.label}">자산별</th:block>
             </label>
           </span>
           <div class="hint" id="trainUnitHint"></div>
@@ -89,7 +89,7 @@
         <div class="prop-value">
           <span class="chip-group">
             <label class="chip" th:each="c, st : ${balances}" th:title="${c.description}">
-              <input type="radio" name="balance" th:value="${c.code}" th:checked="${st.first}"><th:block th:text="${c.label}">미적용</th:block>
+              <input type="radio" name="balance" th:value="${c.code}" th:checked="${c.code == 'UNDERSAMPLE'}"><th:block th:text="${c.label}">미적용</th:block>
             </label>
           </span>
           <div class="hint" id="balanceHint"></div>

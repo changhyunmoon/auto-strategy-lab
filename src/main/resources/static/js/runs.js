@@ -2,7 +2,8 @@
 $(function () {
   var all = [];
   var timer = null;
-  var sortKey = 'valMacroF1', sortDesc = true;
+  // 기본 정렬: 생성일 최신순 (실험 번호는 만든 순서대로 커지므로 번호로 정렬한다)
+  var sortKey = 'id', sortDesc = true;
   var chart = echarts.init(document.getElementById('compareChart'), 'clean');
   var returnChart = echarts.init(document.getElementById('returnChart'), 'clean');
 
@@ -57,12 +58,16 @@ $(function () {
       $tr.append($('<td></td>').append(r.busy
         ? $('<span class="faint small" title="실행 중 · 대기 중인 실험은 끝난 뒤에 지울 수 있습니다">–</span>')
         : $('<input type="checkbox" class="form-check-input run-check">').attr('aria-label', r.name + ' 선택').prop('checked', !!picked[r.id])));
-      $tr.append($('<td></td>').append($('<span class="row-title"></span>').text(r.name)));
-      $tr.append($('<td></td>').append($('<span class="tag"></span>').text(r.modelLabel)).attr('title', r.trainUnit + ' · ' + r.balance));
-      $tr.append($('<td class="muted small"></td>').text(r.trainingSetName));
+      // 실험 칸: 이름 + 모델 · 학습 데이터 · 검증 방식 (표 폭을 줄이려고 한 칸에 모은다)
+      var $sub = $('<div class="run-sub"></div>')
+        .append($('<span class="tag"></span>').text(r.modelLabel).attr('title', r.trainUnit + ' · ' + r.balance))
+        .append(document.createTextNode(' ' + r.trainingSetName + ' · ' + (r.folds > 1 ? r.validation + ' ' + r.folds + '폴드' : r.validation)));
+      $tr.append($('<td class="run-name"></td>').append($('<span class="row-title"></span>').text(r.name)).append($sub));
       $tr.append($('<td></td>').append(statusCell(r)));
-      $tr.append($('<td class="small muted"></td>').text(r.folds > 1 ? r.validation + ' ' + r.folds + '폴드' : r.validation));
-      var $f1 = $('<td class="num"></td>').text(App.fixed(r.valMacroF1));
+      var gap = r.trainMacroF1 != null && r.valMacroF1 != null ? r.trainMacroF1 - r.valMacroF1 : null;
+      var $f1 = $('<td class="num"></td>').text(App.fixed(r.valMacroF1))
+        .attr('title', 'Log loss ' + App.fixed(r.valLogLoss) + ' · 학습 − 검증 차이 ' + (gap == null ? '–' : (gap >= 0 ? '+' : '') + gap.toFixed(3))
+          + (gap != null && gap > 0.1 ? ' (과적합 의심)' : '') + ' · 학습 ' + seconds(r.trainSeconds));
       if (r.valMacroF1 != null && r.valBaselineMacroF1 != null) {
         var d = r.valMacroF1 - r.valBaselineMacroF1;
         $f1.append($('<span class="small"></span>').addClass(d > 0 ? 'diff-up' : 'diff-down').text(' (' + (d >= 0 ? '+' : '') + d.toFixed(3) + ')'));
@@ -71,15 +76,13 @@ $(function () {
       $tr.append($('<td class="num"></td>').text(r.valFoldF1Min == null ? '–' : App.fixed(r.valFoldF1Min))
         .attr('title', r.valFoldF1Mean == null ? '워크포워드에서만 계산' : '폴드 평균 ' + App.fixed(r.valFoldF1Mean) + ' ± ' + App.fixed(r.valFoldF1Std)));
       $tr.append($('<td class="num"></td>').text(App.pct(r.valBalancedAccuracy)));
-      $tr.append($('<td class="num"></td>').text(App.fixed(r.valLogLoss)));
-      var gap = r.trainMacroF1 != null && r.valMacroF1 != null ? r.trainMacroF1 - r.valMacroF1 : null;
-      $tr.append($('<td class="num"></td>').text(gap == null ? '–' : (gap >= 0 ? '+' : '') + gap.toFixed(3)).toggleClass('diff-down', gap != null && gap > 0.1));
       $tr.append($('<td class="num"></td>').text(r.valNetReturn == null ? '–' : (r.valNetReturn >= 0 ? '+' : '') + r.valNetReturn.toFixed(2) + '%')
-        .toggleClass('diff-up', r.valNetReturn > 0).toggleClass('diff-down', r.valNetReturn < 0).attr('title', r.valTrades == null ? '' : '거래 ' + r.valTrades + '번'));
+        .toggleClass('diff-up', r.valNetReturn > 0).toggleClass('diff-down', r.valNetReturn < 0)
+        .append(r.valTrades == null ? '' : $('<div class="faint small"></div>').text('거래 ' + App.formatNumber(r.valTrades) + '번')));
       $tr.append($('<td class="num"></td>').text(r.valMaxDrawdown == null ? '–' : r.valMaxDrawdown.toFixed(2) + '%'));
       $tr.append($('<td class="num"></td>').append(testCell(r)));
-      $tr.append($('<td class="num muted"></td>').text(seconds(r.trainSeconds)));
-      $tr.append($('<td class="muted"></td>').text(r.createdAt));
+      var created = String(r.createdAt || '').split(' ');
+      $tr.append($('<td class="num small"></td>').text(created[0] || '').append($('<div class="faint"></div>').text(created[1] || '')));
       $tr.append($('<td></td>').append(r.busy ? '' : '<button class="btn btn-danger-ghost btn-sm del">삭제</button>'));
       $tb.append($tr);
     });

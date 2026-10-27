@@ -31,7 +31,6 @@ src/main/resources
 ├─ static/css   theme.css(디자인 값) · components.css(공통 요소)
 ├─ static/js    common.js · collect.js · datasets.js · dataset-detail.js · viz.js
 └─ db/migration V1 테이블 · V2 종목 초기값
-mockups/        서버 없이 여는 화면 시안
 ```
 
 ## 처음 실행

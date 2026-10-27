@@ -55,10 +55,9 @@
       <div data-tabs-scope>
         <div class="tabs">
           <div class="tab active" data-tab="chart">📈 차트</div>
-          <div class="tab" data-tab="dist">분포</div>
           <div class="tab" data-tab="corr">상관</div>
-          <div class="tab" data-tab="scatter">산점도</div>
-          <div class="tab" data-tab="quality">품질</div>
+          <span class="spacer" style="flex:1"></span>
+          <a class="small muted link" style="align-self:center;margin-right:4px" th:href="@{/datasets/{id}/features(id=${d.summary.id})}">변수 하나의 분포 · 관계는 변수 탐색 →</a>
         </div>
 
         <div class="tab-panel active" data-panel="chart">
@@ -76,20 +75,6 @@
           <div class="small faint">드래그·스크롤로 확대합니다. 점이 5,000개를 넘으면 여러 봉을 묶어 보여주고, 확대하면 그 구간을 원래 간격으로 다시 불러옵니다.</div>
         </div>
 
-        <div class="tab-panel" data-panel="dist">
-          <div class="toolbar">
-            <span class="small muted">지표</span>
-            <select class="form-select" id="distSel" style="width:240px"></select>
-          </div>
-          <div class="two-col">
-            <div id="distChart" class="chart chart--sm" style="height:380px"></div>
-            <div>
-              <h2 class="section-title" style="margin-top:4px">기초 통계</h2>
-              <table class="db-table"><tbody id="distStats"></tbody></table>
-            </div>
-          </div>
-        </div>
-
         <div class="tab-panel" data-panel="corr">
           <div class="callout" style="margin-bottom:12px">
             <div class="callout-icon">🔗</div>
@@ -98,19 +83,6 @@
           <div id="corrChart" class="chart" style="height:720px; max-width:980px"></div>
         </div>
 
-        <div class="tab-panel" data-panel="scatter">
-          <div class="toolbar">
-            <span class="small muted">X</span><select class="form-select" id="scX" style="width:220px"></select>
-            <span class="small muted" style="margin-left:8px">Y</span><select class="form-select" id="scY" style="width:220px"></select>
-            <span class="small muted" style="margin-left:12px" id="scCorr"></span>
-          </div>
-          <div id="scatterChart" class="chart" style="height:480px; max-width:820px"></div>
-        </div>
-
-        <div class="tab-panel" data-panel="quality">
-          <div class="small muted" style="margin-bottom:8px">날짜(UTC)별로 비어 있는 1분봉 개수입니다.</div>
-          <div id="qualityChart" class="chart chart--sm"></div>
-        </div>
       </div>
     </div>
   </th:block>

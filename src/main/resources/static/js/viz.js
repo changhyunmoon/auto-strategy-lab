@@ -1,4 +1,4 @@
-/* 시각화 화면: 차트 · 분포 · 상관 · 산점도 · 품질 */
+/* 시각화 화면: 차트 · 상관 (변수 하나의 분포 · 관계는 변수 탐색 화면) */
 $(function () {
   var $page = $('#vizPage');
   if (!$page.length) return;
@@ -190,7 +190,7 @@ $(function () {
   });
   $(document).on('click', function () { $('#addMenu').removeClass('open'); });
 
-  /* ================= 분포 · 상관 · 산점도 · 품질 ================= */
+  /* ================= 상관 ================= */
 
   var charts = {};
   function getChart(id) {
@@ -198,33 +198,7 @@ $(function () {
     return charts[id];
   }
   function base() { return { assetId: assetId(), interval: interval() }; }
-  function f4(v) { return v == null ? '-' : Math.abs(v) >= 1000 ? App.formatNumber(Math.round(v)) : Number(v).toPrecision(5); }
 
-  features.forEach(function (c) { $('#distSel, #scX, #scY').append($('<option></option>').val(c).text(c)); });
-  $('#distSel').val(has('rsi_14') ? 'rsi_14' : features[0]);
-  $('#scX').val(has('ema_dev_20') ? 'ema_dev_20' : features[0]);
-  $('#scY').val(has('rsi_14') ? 'rsi_14' : features[1] || features[0]);
-
-  function renderDist() {
-    if (!features.length) return;
-    App.api('GET', '/api/viz/' + datasetId + '/stats', $.extend(base(), { column: $('#distSel').val() })).done(function (r) {
-      getChart('distChart').setOption({
-        grid: { left: 50, right: 16, top: 16, bottom: 36 }, tooltip: { trigger: 'axis' },
-        xAxis: { type: 'category', data: (r.bins || []).map(function (b) { return Number(b).toPrecision(3); }) },
-        yAxis: { type: 'value' },
-        series: [{ type: 'bar', data: r.counts || [], barCategoryGap: '8%', itemStyle: { color: '#2383e2', opacity: .75 } }]
-      }, true);
-      var rows = [['개수', App.formatNumber(r.count)], ['결측 비율', (r.missingRate * 100).toFixed(2) + '%'],
-        ['평균', f4(r.mean)], ['표준편차', f4(r.std)], ['최솟값', f4(r.min)], ['25%', f4(r.q25)],
-        ['중앙값', f4(r.median)], ['75%', f4(r.q75)], ['최댓값', f4(r.max)]];
-      // 용어 도움말 (glossary.js) 이 붙을 이름
-      var terms = { '결측 비율': 'missing', '표준편차': 'stdev', '25%': 'quantile', '중앙값': 'quantile', '75%': 'quantile' };
-      $('#distStats').html(rows.map(function (x) {
-        var name = terms[x[0]] ? '<span data-term="' + terms[x[0]] + '">' + x[0] + '</span>' : x[0];
-        return '<tr><td class="muted">' + name + '</td><td class="num">' + x[1] + '</td></tr>';
-      }).join(''));
-    });
-  }
 
   function renderCorr() {
     if (!features.length) return;
@@ -247,45 +221,13 @@ $(function () {
     });
   }
 
-  function renderScatter() {
-    if (!features.length) return;
-    App.api('GET', '/api/viz/' + datasetId + '/scatter', $.extend(base(), { x: $('#scX').val(), y: $('#scY').val() })).done(function (r) {
-      $('#scCorr').text(r.correlation == null ? '' : '상관 ' + r.correlation.toFixed(3));
-      getChart('scatterChart').setOption({
-        grid: { left: 70, right: 20, top: 20, bottom: 50 }, tooltip: { trigger: 'item' },
-        xAxis: { type: 'value', name: $('#scX').val(), nameLocation: 'middle', nameGap: 30, scale: true },
-        yAxis: { type: 'value', name: $('#scY').val(), nameLocation: 'middle', nameGap: 54, scale: true },
-        series: [{ type: 'scatter', data: r.points, symbolSize: 4, itemStyle: { color: '#2383e2', opacity: .45 } }]
-      }, true);
-    });
-  }
-
-  var qualityLoaded = false;
-  function renderQuality() {
-    if (qualityLoaded) return;
-    App.api('GET', '/api/viz/' + datasetId + '/quality').done(function (r) {
-      qualityLoaded = true;
-      getChart('qualityChart').setOption({
-        legend: { top: 0, left: 0 }, tooltip: { trigger: 'axis' }, grid: { left: 50, right: 16, top: 36, bottom: 30 },
-        xAxis: { type: 'category', data: r.days.map(function (d) { return d.slice(5); }) },
-        yAxis: { type: 'value', name: '누락 분', minInterval: 1 },
-        series: r.series.map(function (s) { return { name: s.name, type: 'bar', data: s.missing }; })
-      }, true);
-    });
-  }
-
   var current = 'chart';
   function refreshTab(name) {
     if (name === 'chart') chart.resize();
-    if (name === 'dist') renderDist();
     if (name === 'corr') renderCorr();
-    if (name === 'scatter') renderScatter();
-    if (name === 'quality') renderQuality();
     Object.keys(charts).forEach(function (k) { charts[k].resize(); });
   }
   $(document).on('tab:shown', function (_, name) { current = name; refreshTab(name); });
-  $('#distSel').on('change', renderDist);
-  $('#scX, #scY').on('change', renderScatter);
   $('input[name="vAsset"], input[name="vInterval"]').on('change', function () {
     range = null;
     loadSeries();

@@ -12,9 +12,6 @@ public enum ModelType {
     BASELINE_MAJORITY("기준", "항상 최빈 클래스",
             "학습 구간에서 가장 많았던 정답(보통 중립)만 예측합니다. 정확도가 높아 보여도 이 모델보다 나은지가 첫 기준입니다.",
             true, List.of()),
-    BASELINE_STRATIFIED("기준", "비율대로 무작위",
-            "학습 구간의 정답 비율대로 무작위로 고릅니다. 「찍기」 수준의 Macro F1 이 얼마인지 보여줍니다.",
-            true, List.of()),
     BASELINE_PERSISTENCE("기준", "직전 봉 방향 유지",
             "방금 끝난 봉의 수익률을 같은 기준 %로 나눠 그대로 다음 봉 정답으로 예측합니다. 단순 모멘텀이 통하는지 보는 시계열 기본 기준입니다.",
             false, List.of()),
@@ -23,12 +20,6 @@ public enum ModelType {
             true, List.of(
                     ParamSpec.ofDouble("lambda", "L2 규제 강도", 0.1, 0, 1000, "클수록 가중치를 작게 눌러 과적합을 줄입니다."),
                     ParamSpec.ofInt("maxIter", "최대 반복 수", 300, 10, 5000, "최적화 반복 횟수 상한입니다."))),
-    DECISION_TREE("트리", "결정트리 (작은 트리)",
-            "몇 가지 조건으로 차례로 나눠 예측합니다. 혼자서는 약하지만 규칙을 읽기 쉬운 설명용 모델입니다.",
-            true, List.of(
-                    ParamSpec.ofInt("maxDepth", "최대 깊이", 6, 2, 30, "질문을 몇 단계까지 할지입니다."),
-                    ParamSpec.ofInt("maxNodes", "최대 리프 수", 64, 2, 100000, "끝 마디(리프) 개수 상한입니다."),
-                    ParamSpec.ofInt("nodeSize", "리프 최소 표본", 200, 1, 1000000, "리프 하나에 들어갈 최소 행 수입니다. 클수록 단순해집니다."))),
     RANDOM_FOREST("트리", "랜덤 포레스트",
             "무작위로 만든 많은 트리의 투표로 예측합니다. 비선형 관계를 잡고 과적합에 비교적 강합니다.",
             true, List.of(

@@ -36,6 +36,12 @@ $(function () {
     renderInfo(res);
   });
 
+  /** 저장된 기본 규칙 설명. 예전 실험은 롱 · 숏 기준이었다 */
+  function ruleText(s) {
+    if (s.allowShort) return "예측 클래스대로 롱 · 숏 (예전 기준)";
+    return s.rule === "EV" ? "롱만 · 기대 수익 > 왕복 비용일 때만 매수" : "롱만 · 예측 클래스대로";
+  }
+
   // ---------- 검증: 기본 규칙 거래 성과 + 워크포워드 폴드 ----------
   var foldChart = null;
   function signedPct(v, d) { return v == null ? '–' : (v >= 0 ? '+' : '') + Number(v).toFixed(d == null ? 2 : d) + '%'; }
@@ -47,7 +53,7 @@ $(function () {
     $c.find('.callout-body').append($('<b></b>').append($('<span data-term="backtest"></span>').text(label)))
       .append(document.createTextNode(' 순수익 ' + signedPct(t.netReturnPct) + ' (비용 전 ' + signedPct(t.grossReturnPct) + ', 단순 보유 ' + signedPct(t.buyHoldPct) +
         ') · 최대 낙폭 ' + Number(t.maxDrawdownPct).toFixed(2) + '% · 거래 ' + App.formatNumber(t.trades) + '번 · 승률 ' + App.pct(t.winRate)))
-      .append($('<div class="faint"></div>').text('기본 규칙: 예측 클래스대로 롱 · 숏, 예측 기간만큼 보유, 수수료 ' + bt.settings.feePct + '% + 슬리피지 ' +
+      .append($('<div class="faint"></div>').text('기본 규칙: ' + ruleText(bt.settings) + ', 예측 기간만큼 보유, 수수료 ' + bt.settings.feePct + '% + 슬리피지 ' +
         bt.settings.slippagePct + '% (한쪽). 다른 규칙 · 비용은 「💰 거래 성과」 탭에서 계산합니다.'));
     return $c;
   }

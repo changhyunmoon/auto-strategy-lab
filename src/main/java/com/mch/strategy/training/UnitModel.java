@@ -3,7 +3,6 @@ package com.mch.strategy.training;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 import com.mch.strategy.trainset.TrainingRows;
 
@@ -58,27 +57,6 @@ public interface UnitModel extends Serializable {
         }
     }
 
-    /** 학습 구간 클래스 비율대로 무작위 선택 */
-    record Stratified(double[] prior, long seed) implements UnitModel {
-        @Override
-        public void predict(double[][] x, double[] prev, int[] pred, double[][] proba) {
-            Random r = new Random(seed + x.length);
-            for (int i = 0; i < x.length; i++) {
-                double u = r.nextDouble(), acc = 0;
-                int c = 0;
-                for (; c < 2; c++) {
-                    acc += prior[c];
-                    if (u < acc) {
-                        break;
-                    }
-                }
-                pred[i] = c;
-                if (proba != null) {
-                    proba[i] = prior.clone();
-                }
-            }
-        }
-    }
 
     /** 직전 N봉의 방향(같은 기준으로 나눈 상승·중립·하락)을 그대로 예측. 확률은 내지 않는다 */
     record Persistence() implements UnitModel {

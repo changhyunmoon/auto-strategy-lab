@@ -137,24 +137,11 @@ public class ApiController {
                 columns, maxPoints);
     }
 
-    @GetMapping("/viz/{id}/stats")
-    public Map<String, Object> stats(@PathVariable long id, @RequestParam long assetId,
-                                     @RequestParam String interval, @RequestParam String column) {
-        return vizService.stats(id, assetId, interval, column);
-    }
-
     @GetMapping("/viz/{id}/correlation")
     public Map<String, Object> correlation(@PathVariable long id, @RequestParam long assetId,
                                            @RequestParam String interval,
                                            @RequestParam(required = false) List<String> columns) {
         return vizService.correlation(id, assetId, interval, columns);
-    }
-
-    @GetMapping("/viz/{id}/scatter")
-    public Map<String, Object> scatter(@PathVariable long id, @RequestParam long assetId,
-                                       @RequestParam String interval,
-                                       @RequestParam String x, @RequestParam String y) {
-        return vizService.scatter(id, assetId, interval, x, y);
     }
 
     /** 변수 탐색: 한 열의 분포 · N봉 뒤 수익률과의 관계 · 지속성 · 시간대 · 관련 변수 */
@@ -163,11 +150,6 @@ public class ApiController {
                                        @RequestParam String interval, @RequestParam String column,
                                        @RequestParam(required = false) Integer horizon) {
         return featureProfileService.profile(id, assetId, interval, column, horizon);
-    }
-
-    @GetMapping("/viz/{id}/quality")
-    public Map<String, Object> quality(@PathVariable long id) {
-        return vizService.quality(id);
     }
 
     // ---------- 종목 관리 ----------

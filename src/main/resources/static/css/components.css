@@ -314,9 +314,11 @@
 .chart--cm { height: 340px; max-width: 460px; }
 .diff-up { color: var(--tag-green-fg); }
 .diff-down { color: var(--tag-red-fg); }
-#runTable td:first-child { min-width: 220px; }
-#runTable td, #runTable th { white-space: nowrap; }
-#runTable td:first-child { white-space: normal; }
+#runTable td { white-space: nowrap; }
+#runTable th { white-space: normal; vertical-align: bottom; }
+#runTable td.run-name { white-space: normal; min-width: 220px; max-width: 340px; }
+#runTable .run-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+#runTable .run-sub .tag { font-size: 11.5px; padding: 0 6px; }
 
 /* ---------- 용어 도움말 (glossary.js) ---------- */
 .term-help {
@@ -384,3 +386,10 @@
 [data-hover-term] { cursor: help; }
 .check-row[data-hover-term] .name, .hover-name { text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
 .gl-pop .gl-row { white-space: pre-line; }
+
+/* ---------- 데이터세트 미리보기: 열이 많아 옆으로 밀어도 시각 열은 고정 ---------- */
+#previewTable th:first-child, #previewTable td:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--bg); white-space: nowrap;
+  box-shadow: 1px 0 0 var(--line);
+}
+#previewTable td { white-space: nowrap; }

@@ -12,13 +12,12 @@ $(function () {
     var $tb = $('#setTable tbody').empty();
     all.forEach(function (t) {
       var $tr = $('<tr class="clickable"></tr>').attr('data-id', t.id);
-      $tr.append($('<td></td>').append($('<span class="row-title"></span>').text('🏷️ ' + t.name)));
+      // 이름 칸: 이름 + 데이터세트 · 종목 · 판단 간격 (표 폭을 줄이려고 한 칸에 모은다)
+      var $sub = $('<div class="small muted" style="margin-top:2px"></div>').text(t.datasetName + ' · ');
+      t.assets.forEach(function (a) { $sub.append($('<span class="tag"></span>').text(a)).append(' '); });
+      $sub.append(document.createTextNode('· ' + t.interval + (t.extraIntervals.length ? ' (+' + t.extraIntervals.join('·') + ')' : '')));
+      $tr.append($('<td style="min-width:240px;max-width:380px"></td>').append($('<span class="row-title"></span>').text('🏷️ ' + t.name)).append($sub));
       $tr.append($('<td></td>').append(statusTag(t)));
-      $tr.append($('<td class="muted"></td>').text(t.datasetName));
-      var $assets = $('<td></td>');
-      t.assets.forEach(function (a) { $assets.append($('<span class="tag"></span>').text(a)).append(' '); });
-      $tr.append($assets);
-      $tr.append($('<td></td>').text(t.interval + (t.extraIntervals.length ? ' (+' + t.extraIntervals.join('·') + ')' : '')));
       $tr.append($('<td class="small" style="max-width:260px"></td>').text(t.labelText));
       $tr.append($('<td class="num small"></td>').html(
         $('<div></div>').text('학 ' + t.trainPeriod).prop('outerHTML') +

@@ -3,7 +3,7 @@ $(function () {
   if (!$('#trainForm').length) return;
 
   // 노션 「모델 후보 조사」의 1차 추천: 기준 3종 + 로지스틱 + 랜덤 포레스트 + 그래디언트 부스팅
-  var FIRST = ['BASELINE_MAJORITY', 'BASELINE_STRATIFIED', 'BASELINE_PERSISTENCE', 'LOGISTIC', 'RANDOM_FOREST', 'GRADIENT_BOOSTING'];
+  var FIRST = ['BASELINE_MAJORITY', 'BASELINE_PERSISTENCE', 'LOGISTIC', 'RANDOM_FOREST', 'GRADIENT_BOOSTING'];
 
   // ---------- 학습 데이터 ----------
   function setHint() {

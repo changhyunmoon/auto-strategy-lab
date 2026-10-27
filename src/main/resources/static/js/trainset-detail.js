@@ -37,6 +37,23 @@ $(function () {
   if (tr0.ambiguous || va0.ambiguous) hint.push('목표 · 손절 동시 도달(중립 처리) 학습 ' + App.formatNumber(tr0.ambiguous) + '건 · 검증 ' + App.formatNumber(va0.ambiguous) + '건');
   $('#labelStatsHint').text(hint.join(' · '));
 
+  // 정답이 중립에 크게 쏠리면 모델이 중립만 고르기 쉽다 → 경고 + 덜 쏠리는 기준 추천
+  var cur = (tr0.classes && tr0.classes.ALL && tr0.classes.ALL[selected]) || null;
+  if (cur) {
+    var n = cur[0] + cur[1] + cur[2], neutral = n ? cur[1] / n : 0;
+    if (neutral > 0.7) {
+      var best = null;
+      Object.keys(tr0.classes.ALL).forEach(function (k) {
+        var c = tr0.classes.ALL[k], m = c[0] + c[1] + c[2], share = m ? c[1] / m : 1;
+        if (best == null || Math.abs(share - 0.55) < Math.abs(best.share - 0.55)) best = { k: k, share: share };
+      });
+      $('#labelStatsHint').before($('<div class="callout callout-yellow small" style="margin:8px 0"></div>').append('<div class="callout-icon">⚠️</div>')
+        .append($('<div class="callout-body"></div>').append($('<b></b>').text('정답의 ' + Math.round(neutral * 100) + '% 가 중립입니다. '))
+          .append(document.createTextNode('모델이 「항상 중립」으로 굳어 거래가 거의 없을 수 있습니다.'
+            + (best && best.k !== selected ? ' 아래 「다른 기준이었다면」 표의 「' + best.k + '」(중립 약 ' + Math.round(best.share * 100) + '%)처럼 기준을 낮춰 다시 만드는 것을 권합니다.' : '')))));
+    }
+  }
+
   // ---------- 구간 ----------
   var total = SPLITS.reduce(function (s, p) { return s + (splits[p[0]].rows || 0); }, 0);
   var $tl = $('#timeline');

@@ -388,9 +388,10 @@ public class ModelRunner {
 
     // ===================================================== 거래 성과 (백테스트)
 
-    /** 기본 규칙: 예측 클래스대로 롱 · 숏, 정답 예측 기간만큼 보유, 기본 수수료 · 슬리피지 */
+    /** 기본 규칙: 롱만 · 확률 모델이면 기대 수익 > 왕복 비용일 때만 매수 (아니면 예측 클래스대로) · 정답 예측 기간만큼 보유 · 시장가 */
     static Map<String, Object> defaultBacktest(TrainingData data, int[] idx, Prediction p, boolean proba) {
-        Backtester.Settings s = Backtester.Settings.defaults(Backtester.DEFAULT_FEE_PCT, Backtester.DEFAULT_SLIPPAGE_PCT, data.horizon);
+        Backtester.Settings s = Backtester.Settings.defaults(Backtester.DEFAULT_FEE_PCT, Backtester.DEFAULT_SLIPPAGE_PCT, data.horizon,
+                proba && p.proba() != null);
         return Backtester.run(backtestInput(data, idx, p.pred(), p.proba()), s, false);
     }
 
@@ -398,19 +399,20 @@ public class ModelRunner {
         int n = idx.length;
         long[] time = new long[n];
         int[] asset = new int[n];
-        float[] close = new float[n];
+        float[] close = new float[n], thr = new float[n];
         boolean range = data.high != null && data.low != null;
         float[] high = range ? new float[n] : null, low = range ? new float[n] : null;
         for (int i = 0; i < n; i++) {
             time[i] = data.time[idx[i]];
             asset[i] = data.asset[idx[i]];
             close[i] = data.close[idx[i]];
+            thr[i] = data.threshold[idx[i]];
             if (range) {
                 high[i] = data.high[idx[i]];
                 low[i] = data.low[idx[i]];
             }
         }
-        return new Backtester.Input(time, asset, close, high, low, pred, proba, data.assets, data.decisionMinutes * 60_000L);
+        return new Backtester.Input(time, asset, close, high, low, pred, proba, data.assets, data.decisionMinutes * 60_000L, thr);
     }
 
     /** 저장한 예측으로 원하는 규칙 · 비용의 거래 성과를 계산한다 (화면 「거래 성과」 탭) */
@@ -633,7 +635,7 @@ public class ModelRunner {
     private static String nativeImportanceNote(ModelType type) {
         return switch (type) {
             case LOGISTIC -> "표준화한 입력의 계수 절댓값 평균입니다. 클수록 예측에 크게 반영됩니다 (방향은 클래스마다 다름).";
-            case RANDOM_FOREST, DECISION_TREE, GRADIENT_BOOSTING -> "트리가 그 열로 나눌 때 줄인 불순도(또는 손실)의 합입니다. 학습 구간 기준이며 값이 넓은 열이 과대평가될 수 있습니다.";
+            case RANDOM_FOREST, GRADIENT_BOOSTING -> "트리가 그 열로 나눌 때 줄인 불순도(또는 손실)의 합입니다. 학습 구간 기준이며 값이 넓은 열이 과대평가될 수 있습니다.";
             default -> "이 모델은 자체 중요도가 없습니다.";
         };
     }

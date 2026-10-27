@@ -12,14 +12,16 @@ import java.util.TreeMap;
 /**
  * 예측을 매매로 바꿔 수수료를 뺀 성과를 계산한다 (자산마다 따로 거래, 자금은 자산 수로 똑같이 나눔).
  * <ul>
- *   <li>신호: 확률 방식이면 상승 확률 ≥ 기준(그리고 하락 확률보다 큼)일 때 롱, 하락 확률 ≥ 기준이면 숏.
- *       클래스 방식이면 예측이 상승이면 롱, 하락이면 숏.</li>
+ *   <li>신호 (+1 상승 · −1 하락 · 0 없음):
+ *       클래스 방식 = 예측 클래스 그대로. 확률 방식 = 상승 확률 ≥ 기준이면 +1, 하락 확률 ≥ 기준이면 −1.
+ *       기대 수익 방식 = (상승 확률 − 하락 확률) × 그 행의 정답 기준(%) 이 왕복 비용 + 여유보다 크면 +1, −(왕복 비용 + 여유)보다 작으면 −1.</li>
+ *   <li>롱만: 상승 신호에 사고, 하락 신호 · 보유 기간 끝에 판다 (업비트 원화 현물은 공매도 불가).
+ *       allowShort 는 테스트 · 참고용으로만 남겨 둔다.</li>
  *   <li>시장가: 진입 · 청산은 판단 봉 종가에 바로 체결된다고 가정한다. 매번 수수료 + 슬리피지를 한쪽 비용으로 뺀다.</li>
  *   <li>지정가: 판단 봉 종가에 주문을 걸고, 다음 W봉 안에 가격이 그 값을 넘어서야(매수는 저가 &lt; 주문가,
  *       매도는 고가 &gt; 주문가) 주문가에 체결된다. 닿기만 한 경우는 대기 순번 때문에 체결되지 않았다고 본다.
  *       비용은 수수료만 뺀다. 진입이 W봉 안에 안 되면 취소(놓친 거래), 청산이 안 되면 W봉째 종가에 시장가로 판다.</li>
- *   <li>보유: holdBars 봉이 지나면 청산. 같은 방향 신호가 또 나오면 보유를 연장(선택), 반대 신호면 뒤집는다.</li>
- *   <li>숏은 참고용이다. 업비트 원화 현물에서는 공매도를 할 수 없다.</li>
+ *   <li>보유: holdBars 봉이 지나면 청산. 같은 방향 신호가 또 나오면 보유를 연장(선택), 반대 신호면 청산한다.</li>
  * </ul>
  * 모든 % 값은 퍼센트 단위(1.5 = 1.5%)다.
  */
@@ -40,13 +42,27 @@ public final class Backtester {
     public static final String LIMIT = "LIMIT";
     public static final int DEFAULT_LIMIT_WAIT_BARS = 1;
 
+    /** 진입 규칙 */
+    public static final String RULE_CLASS = "CLASS";
+    public static final String RULE_PROBA = "PROBA";
+    public static final String RULE_EV = "EV";
+
     /**
+     * @param rule          CLASS(예측 클래스) · PROBA(확률 기준) · EV(기대 수익 &gt; 비용). useProbability 는 rule 이 PROBA 인지와 같다.
+     * @param evMarginPct   기대 수익 규칙에서 왕복 비용 위에 더 요구할 여유(%)
      * @param orderType     MARKET(시장가) · LIMIT(지정가)
      * @param limitWaitBars 지정가 주문을 몇 봉까지 기다릴지 (시장가면 쓰지 않음)
      */
     public record Settings(double feePct, double slippagePct, boolean useProbability, double upThreshold,
                            double downThreshold, int holdBars, boolean extendOnSignal, boolean allowShort,
-                           String orderType, int limitWaitBars) {
+                           String orderType, int limitWaitBars, String rule, double evMarginPct) {
+
+        public Settings(double feePct, double slippagePct, boolean useProbability, double upThreshold,
+                        double downThreshold, int holdBars, boolean extendOnSignal, boolean allowShort,
+                        String orderType, int limitWaitBars) {
+            this(feePct, slippagePct, useProbability, upThreshold, downThreshold, holdBars, extendOnSignal, allowShort,
+                    orderType, limitWaitBars, useProbability ? RULE_PROBA : RULE_CLASS, 0);
+        }
 
         /** 시장가 */
         public Settings(double feePct, double slippagePct, boolean useProbability, double upThreshold,
@@ -55,13 +71,26 @@ public final class Backtester {
                     MARKET, DEFAULT_LIMIT_WAIT_BARS);
         }
 
-        /** 학습 직후 자동으로 계산하는 기본 규칙: 예측 클래스대로 롱 · 숏, 예측 기간만큼 보유, 시장가 */
+        /**
+         * 학습 직후 자동으로 계산하는 기본 규칙: 롱만, 예측 기간만큼 보유, 시장가.
+         * 확률을 내는 모델이면 기대 수익 &gt; 왕복 비용일 때만 사고, 아니면 예측 클래스대로.
+         */
+        public static Settings defaults(double feePct, double slippagePct, int holdBars, boolean probability) {
+            return new Settings(feePct, slippagePct, false, 0.5, 0.5, holdBars, true, false,
+                    MARKET, DEFAULT_LIMIT_WAIT_BARS, probability ? RULE_EV : RULE_CLASS, 0);
+        }
+
         public static Settings defaults(double feePct, double slippagePct, int holdBars) {
-            return new Settings(feePct, slippagePct, false, 0.5, 0.5, holdBars, true, true);
+            return defaults(feePct, slippagePct, holdBars, false);
         }
 
         public boolean isLimit() {
             return LIMIT.equals(orderType);
+        }
+
+        /** 왕복 비용(%): 지정가면 수수료 × 2, 시장가면 (수수료 + 슬리피지) × 2 */
+        double roundTripPct() {
+            return isLimit() ? feePct * 2 : (feePct + slippagePct) * 2;
         }
 
         /** 시장가 한쪽 비용 (수수료 + 슬리피지) */
@@ -76,11 +105,12 @@ public final class Backtester {
 
         Settings withOrder(String type, double slippage) {
             return new Settings(feePct, slippage, useProbability, upThreshold, downThreshold, holdBars, extendOnSignal,
-                    allowShort, type, limitWaitBars);
+                    allowShort, type, limitWaitBars, rule, evMarginPct);
         }
 
         Settings withThreshold(double th) {
-            return new Settings(feePct, slippagePct, true, th, th, holdBars, extendOnSignal, allowShort, orderType, limitWaitBars);
+            return new Settings(feePct, slippagePct, true, th, th, holdBars, extendOnSignal, allowShort, orderType,
+                    limitWaitBars, RULE_PROBA, evMarginPct);
         }
 
         Map<String, Object> toMap() {
@@ -95,6 +125,8 @@ public final class Backtester {
             m.put("allowShort", allowShort);
             m.put("orderType", orderType);
             m.put("limitWaitBars", limitWaitBars);
+            m.put("rule", rule);
+            m.put("evMarginPct", evMarginPct);
             return m;
         }
     }
@@ -102,12 +134,22 @@ public final class Backtester {
     /**
      * 행 순서는 자산별로 모은 뒤 시각순이어야 한다 (학습 데이터 파일 순서).
      * high · low 는 지정가 체결 판단용이며, 예전 학습 데이터면 null 이다.
+     * thresholdPct 는 행마다의 정답 기준(%) — 기대 수익 규칙에 쓴다 (없으면 null).
      */
     public record Input(long[] time, int[] asset, float[] close, float[] high, float[] low, int[] pred,
-                        double[][] proba, List<String> assets, long barMs) {
+                        double[][] proba, List<String> assets, long barMs, float[] thresholdPct) {
+
+        public Input(long[] time, int[] asset, float[] close, float[] high, float[] low, int[] pred,
+                     double[][] proba, List<String> assets, long barMs) {
+            this(time, asset, close, high, low, pred, proba, assets, barMs, null);
+        }
 
         public Input(long[] time, int[] asset, float[] close, int[] pred, double[][] proba, List<String> assets, long barMs) {
-            this(time, asset, close, null, null, pred, proba, assets, barMs);
+            this(time, asset, close, null, null, pred, proba, assets, barMs, null);
+        }
+
+        public boolean canUseExpectedValue() {
+            return proba != null && thresholdPct != null;
         }
 
         public boolean hasRange() {
@@ -379,11 +421,11 @@ public final class Backtester {
                     eqGross *= 1 + g;
                     eqNet *= (1 + g) * (1 - cost);
                     trades.add(new Trade(asset, pos, entryTime, t, entry, c, rowIndex - entryRow, g * 100,
-                            ((1 - cost) * (1 + g) * (1 - cost) - 1) * 100, flip ? "반대 신호" : "보유 기간 끝", "시장가", "시장가"));
+                            ((1 - cost) * (1 + g) * (1 - cost) - 1) * 100, flip ? (pos > 0 ? "하락 신호" : "상승 신호") : "보유 기간 끝", "시장가", "시장가"));
                     pos = 0;
                 }
             }
-            if (pos == 0 && sig != 0) {
+            if (pos == 0 && canEnter(s, sig)) {
                 pos = sig;
                 entry = c;
                 entryTime = t;
@@ -512,11 +554,11 @@ public final class Backtester {
                     state = WAIT_EXIT;
                     orderPrice = c;
                     orderTime = t;
-                    exitReason = flip ? "반대 신호" : "보유 기간 끝";
+                    exitReason = flip ? (side > 0 ? "하락 신호" : "상승 신호") : "보유 기간 끝";
                     exitOrders++;
                 }
             }
-            if (state == FLAT && sig != 0) {
+            if (state == FLAT && canEnter(s, sig)) {
                 state = WAIT_ENTRY;
                 side = sig;
                 orderPrice = c;
@@ -562,20 +604,28 @@ public final class Backtester {
 
     /** 1 = 롱, −1 = 숏, 0 = 신호 없음 */
     static int signal(Input in, Settings s, int i) {
-        int sig;
-        if (s.useProbability && in.proba() != null) {
+        if (RULE_EV.equals(s.rule) && in.canUseExpectedValue()) {
+            double[] p = in.proba()[i];
+            double ev = (p[2] - p[0]) * in.thresholdPct()[i];
+            double need = s.roundTripPct() + s.evMarginPct;
+            return ev > need ? 1 : ev < -need ? -1 : 0;
+        }
+        if ((RULE_PROBA.equals(s.rule) || s.useProbability) && in.proba() != null) {
             double[] p = in.proba()[i];
             if (p[2] >= s.upThreshold && p[2] >= p[0]) {
-                sig = 1;
-            } else if (p[0] >= s.downThreshold && p[0] > p[2]) {
-                sig = -1;
-            } else {
-                sig = 0;
+                return 1;
             }
-        } else {
-            sig = in.pred()[i] == 2 ? 1 : in.pred()[i] == 0 ? -1 : 0;
+            if (p[0] >= s.downThreshold && p[0] > p[2]) {
+                return -1;
+            }
+            return 0;
         }
-        return sig < 0 && !s.allowShort ? 0 : sig;
+        return in.pred()[i] == 2 ? 1 : in.pred()[i] == 0 ? -1 : 0;
+    }
+
+    /** 이 신호로 새로 들어갈 수 있는지. 롱만 할 때 하락 신호는 진입이 아니라 청산에만 쓴다. */
+    private static boolean canEnter(Settings s, int sig) {
+        return sig > 0 || (sig < 0 && s.allowShort);
     }
 
     private static Map<String, Object> stats(List<Trade> trades, double[] net, double[] gross, long[] time,

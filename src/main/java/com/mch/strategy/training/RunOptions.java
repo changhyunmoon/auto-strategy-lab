@@ -8,8 +8,8 @@ public final class RunOptions {
 
     /** 학습 단위 */
     public enum TrainUnit {
-        PER_ASSET("자산별 모델", "BTC·ETH 를 각각 따로 학습합니다 (기본)."),
-        POOLED("통합 모델", "모든 자산을 한 모델로 학습하고, 자산 구분 열을 입력에 더합니다.");
+        PER_ASSET("자산별 모델", "BTC·ETH 를 각각 따로 학습합니다. 자산마다 학습 행이 절반이라 데이터가 짧을 때 불리합니다."),
+        POOLED("통합 모델", "모든 자산을 한 모델로 학습하고, 자산 구분 열을 입력에 더합니다 (기본). 학습 행이 자산 수만큼 늘어나 더 안정적으로 배웁니다.");
 
         private final String label;
         private final String description;

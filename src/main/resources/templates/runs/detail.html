@@ -125,7 +125,7 @@
         <div class="callout-body small">
           예측을 매매 규칙으로 바꿔 계산한 <span data-term="backtest">과거 거래 성과</span>입니다. <b>시장가</b>는 판단 봉 종가에 바로 체결된다고 보고 매번 수수료 + 슬리피지를 빼고,
           <b>지정가</b>는 그 종가에 주문을 걸어 두고 다음 봉들에서 실제로 그 가격을 넘어섰을 때만 체결된다고 봅니다.
-          <b>숏은 참고용</b>입니다 (업비트 원화 현물은 공매도 불가). 규칙 · 기준을 이 화면에서 여러 번 바꿔 고를수록 검증 구간에 맞춘 운이 섞입니다.
+          <b>롱만</b> 계산합니다 (업비트 원화 현물은 공매도 불가). 규칙 · 기준을 이 화면에서 여러 번 바꿔 고를수록 검증 구간에 맞춘 운이 섞입니다.
         </div>
       </div>
       <div class="props">
@@ -161,8 +161,13 @@
         <div class="prop"><div class="prop-label"><span class="prop-icon">🚦</span>진입 규칙</div>
           <div class="prop-value">
             <span class="chip-group">
-              <label class="chip"><input type="radio" name="btRule" value="class" checked>예측 클래스대로</label>
-              <label class="chip" id="btProbaChip"><input type="radio" name="btRule" value="proba"><span data-term="probThreshold">확률 기준</span></label>
+              <label class="chip bt-proba-only" id="btEvChip"><input type="radio" name="btRule" value="EV"><span data-term="evRule">기대 수익 &gt; 비용</span></label>
+              <label class="chip"><input type="radio" name="btRule" value="CLASS">예측 클래스대로</label>
+              <label class="chip bt-proba-only" id="btProbaChip"><input type="radio" name="btRule" value="PROBA"><span data-term="probThreshold">확률 기준</span></label>
+            </span>
+            <span class="bt-ev" style="display:none">
+              <span class="small muted" style="margin-left:8px">비용 위 여유</span>
+              <input type="number" class="form-control" id="btEvMargin" value="0" step="0.05" min="0" max="5" style="width:80px"><span class="small muted">%</span>
             </span>
             <span class="bt-proba" style="display:none">
               <span class="small muted" style="margin-left:8px">상승 확률 ≥</span>
@@ -170,7 +175,8 @@
               <span class="small muted">하락 확률 ≥</span>
               <input type="number" class="form-control" id="btDown" value="0.5" step="0.05" min="0" max="1" style="width:80px">
             </span>
-            <div class="hint">상승 신호 → 롱, 하락 신호 → 숏, 중립 → 신호 없음.</div>
+            <div class="hint">롱만 합니다 (업비트 원화 현물은 공매도 불가). 상승 신호에 사고, 보유 중 하락 신호가 나오거나 보유 기간이 끝나면 팝니다.
+              「기대 수익 &gt; 비용」은 (상승 확률 − 하락 확률) × 정답 기준 % 가 왕복 비용보다 클 때만 삽니다.</div>
           </div>
         </div>
         <div class="prop"><div class="prop-label"><span class="prop-icon">⏳</span><span data-term="holdBars">보유 봉 수</span></div>
@@ -179,7 +185,7 @@
             <label class="small" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-left:10px">
               <input type="checkbox" class="form-check-input" style="margin:0" id="btExtend" checked><span data-term="extendOnSignal">같은 신호면 보유 연장</span>
             </label>
-            <div class="hint">기본은 정답의 예측 기간과 같습니다. 보유 중 <span data-term="flip">반대 신호</span>가 나오면 청산하고 반대로 들어갑니다.</div>
+            <div class="hint">기본은 정답의 예측 기간과 같습니다. 보유 중 하락 신호가 나오면 그 봉에서 팝니다.</div>
           </div>
         </div>
       </div>
