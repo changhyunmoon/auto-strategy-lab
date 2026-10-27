@@ -93,8 +93,22 @@ $(function () {
     var wf = v && v !== 'HOLDOUT';
     $('.wf-only').toggle(!!wf);
     $('.rolling-only').toggle(v === 'WALK_FORWARD_ROLLING');
-    if (!wf) return;
     var $o = $('#setSel option:selected');
+    // 학습 데이터에서 정한 날짜 구간을 이 검증 방식이 실제로 어떻게 쓰는지 (워크포워드는 학습 · 검증 경계를 쓰지 않는다)
+    var trainP = String($o.data('train') || ''), valP = String($o.data('val') || '');
+    var $u = $('#splitUsage .callout-body').empty();
+    if (trainP && valP) {
+      if (!wf) {
+        $u.append($('<b></b>').text('학습 데이터의 구간을 그대로 씁니다. '))
+          .append(document.createTextNode('학습 ' + trainP + ' 로 학습하고, 검증 ' + valP + ' 로 한 번 평가합니다. 최종 테스트 구간은 쓰지 않습니다.'));
+      } else {
+        $u.append($('<b></b>').text('학습 데이터의 학습 · 검증 경계는 쓰지 않습니다. '))
+          .append(document.createTextNode('학습 구간 시작부터 검증 구간 끝까지(' + trainP.split(' ~ ')[0] + ' ~ ' + valP.split(' ~ ')[1]
+            + ')를 하나의 「탐색 기간」으로 합친 뒤, 아래 첫 학습 비율 · 폴드 수로 다시 나눕니다. 최종 테스트 구간은 쓰지 않습니다.'));
+      }
+    }
+    $('#splitUsage').toggle(!!(trainP && valP));
+    if (!wf) return;
     var start = Date.parse(String($o.data('train')).split(' ~ ')[0] + 'T00:00:00Z');
     var end = Date.parse(String($o.data('val')).split(' ~ ')[1] + 'T00:00:00Z') + 86400000;
     var folds = Math.max(2, Math.min(12, Number($('#folds').val()) || 4));
