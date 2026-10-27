@@ -45,6 +45,16 @@ var App = (function ($) {
     $(document).trigger('tab:shown', [name]);
   });
 
+  /** 「중지」 버튼: data-cancel-job="작업 번호" 를 붙이면 확인 후 그 작업을 멈춘다. */
+  $(document).on('click', '[data-cancel-job]', function () {
+    var $b = $(this), jobId = $b.attr('data-cancel-job');
+    if (!jobId || !window.confirm('진행 중인 작업을 중지할까요?\n지금까지 받은 1분봉은 저장된 채로 남고, 이 데이터세트는 「실패(중지)」로 표시됩니다.')) return;
+    $b.prop('disabled', true).text('중지하는 중…');
+    api('POST', '/api/jobs/' + jobId + '/cancel').done(function () {
+      toast('중지를 요청했습니다. 몇 초 안에 멈춥니다.');
+    }).fail(function () { $b.prop('disabled', false).text('■ 중지'); });
+  });
+
   /** 0~1 비율 → "12.3%". 값이 없으면(계산 불가) "–" */
   function pct(v, digits) {
     return v == null || isNaN(v) ? '–' : (v * 100).toFixed(digits == null ? 1 : digits) + '%';

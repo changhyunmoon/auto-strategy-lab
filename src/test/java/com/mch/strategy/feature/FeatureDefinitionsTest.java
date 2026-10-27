@@ -52,6 +52,15 @@ class FeatureDefinitionsTest {
     }
 
     @Test
+    void every_column_has_a_description() {
+        registry.all().forEach(f -> f.outputColumns().forEach(c ->
+                assertThat(FeatureDocs.find(c)).as("변수 탐색 화면 설명 없음: " + c).isPresent()));
+        com.mch.strategy.dataset.DatasetColumns.BAR_COLUMNS.forEach(c ->
+                assertThat(FeatureDocs.find(c)).as("봉 값 설명 없음: " + c).isPresent());
+        FeatureDocs.all().forEach((c, doc) -> assertThat(doc.summary()).as(c).isNotBlank());
+    }
+
+    @Test
     void every_feature_computes_full_length_columns() {
         FeatureInput input = fakeInput(2000, 15);
         for (FeatureDefinition f : registry.all()) {

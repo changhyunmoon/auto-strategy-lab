@@ -6,12 +6,12 @@ import java.util.List;
 import java.util.Map;
 
 /** JSON 에 NaN · 무한대가 들어가지 않게 null 로 바꾼다 (브라우저 JSON.parse 가 NaN 을 못 읽는다). */
-final class JsonSafe {
+public final class JsonSafe {
 
     private JsonSafe() {
     }
 
-    static Object clean(Object v) {
+    public static Object clean(Object v) {
         if (v instanceof Double d) {
             return Double.isFinite(d) ? d : null;
         }

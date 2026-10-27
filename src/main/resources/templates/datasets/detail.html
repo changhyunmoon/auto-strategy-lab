@@ -60,11 +60,16 @@
   <!-- 만드는 중이면 진행률 -->
   <div th:if="${d.summary.building}" style="margin-top:24px" id="buildingBox">
     <div class="progress-thin"><span id="progressBar" th:style="${'width:' + d.summary.progress + '%'}"></span></div>
-    <div class="small muted" style="margin-top:6px" id="progressText" th:text="${d.summary.progress + '% · ' + d.summary.step}"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+      <div class="small muted" id="progressText" th:text="${d.summary.progress + '% · ' + d.summary.step}"></div>
+      <button type="button" class="btn btn-danger-ghost btn-sm" style="margin-left:auto" th:if="${d.summary.jobId != null}"
+              th:attr="data-cancel-job=${d.summary.jobId}">■ 중지</button>
+    </div>
   </div>
 
   <div style="margin:20px 0 4px" th:if="${d.summary.status == 'READY'}">
     <a class="btn btn-primary" th:href="@{/viz(datasetId=${d.summary.id})}">📊 시각화로 열기</a>
+    <a class="btn btn-ghost" th:href="@{/datasets/{id}/features(id=${d.summary.id})}">🔎 변수별로 살펴보기</a>
   </div>
 
   <div data-tabs-scope style="margin-top:28px">
@@ -83,7 +88,11 @@
           <tbody>
           <tr th:each="c : ${d.columns}">
             <td class="num faint" th:text="${c.index + 1}">1</td>
-            <td class="mono" th:text="${c.name}">close</td>
+            <td class="mono" th:data-hover-term="${'col_' + c.name}">
+              <a class="row-title" th:if="${d.summary.status == 'READY'}" th:text="${c.name}"
+                 th:href="@{/datasets/{id}/features(id=${d.summary.id}, col=${c.name})}">close</a>
+              <th:block th:unless="${d.summary.status == 'READY'}" th:text="${c.name}">close</th:block>
+            </td>
             <td th:text="${c.featureName}">봉 값</td>
             <td><span class="tag" th:text="${c.group}">-</span></td>
             <td class="muted" th:text="${c.param}"></td>
@@ -165,6 +174,10 @@
 </div>
 
 <th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    /* 열 이름에 마우스를 올리면 나오는 설명 (glossary.js) */
+    Glossary.addColumnDocs(/*[[${columnDocs}]]*/ {});
+  </script>
   <script th:src="@{/js/dataset-detail.js}"></script>
 </th:block>
 </body>

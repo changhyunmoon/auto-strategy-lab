@@ -399,12 +399,18 @@ public class ModelRunner {
         long[] time = new long[n];
         int[] asset = new int[n];
         float[] close = new float[n];
+        boolean range = data.high != null && data.low != null;
+        float[] high = range ? new float[n] : null, low = range ? new float[n] : null;
         for (int i = 0; i < n; i++) {
             time[i] = data.time[idx[i]];
             asset[i] = data.asset[idx[i]];
             close[i] = data.close[idx[i]];
+            if (range) {
+                high[i] = data.high[idx[i]];
+                low[i] = data.low[idx[i]];
+            }
         }
-        return new Backtester.Input(time, asset, close, pred, proba, data.assets, data.decisionMinutes * 60_000L);
+        return new Backtester.Input(time, asset, close, high, low, pred, proba, data.assets, data.decisionMinutes * 60_000L);
     }
 
     /** 저장한 예측으로 원하는 규칙 · 비용의 거래 성과를 계산한다 (화면 「거래 성과」 탭) */

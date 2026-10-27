@@ -88,6 +88,26 @@ public class MlApiController {
         return Map.of("deleted", id);
     }
 
+    /** 여러 실험을 한 번에 지운다. 실행 중 · 대기 중이거나 이미 없는 실험은 건너뛴다. 요청: {"ids": [1, 2]} */
+    @PostMapping("/runs/delete")
+    public Map<String, Object> deleteRuns(@RequestBody Map<String, List<Long>> body) {
+        List<Long> ids = body.get("ids");
+        if (ids == null || ids.isEmpty()) {
+            throw com.mch.strategy.common.ApiException.badRequest("지울 실험을 고르세요.");
+        }
+        List<Long> deleted = new java.util.ArrayList<>();
+        List<Map<String, Object>> skipped = new java.util.ArrayList<>();
+        for (Long id : ids.stream().distinct().toList()) {
+            try {
+                runService.delete(id);
+                deleted.add(id);
+            } catch (com.mch.strategy.common.ApiException e) {
+                skipped.add(Map.of("id", id, "reason", e.getMessage()));
+            }
+        }
+        return Map.of("deleted", deleted, "skipped", skipped);
+    }
+
     /** 결과 JSON (split = val · test). 아직 없으면 {"empty": true} */
     @GetMapping(value = "/runs/{id}/result", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> result(@PathVariable long id, @RequestParam String split) {

@@ -31,6 +31,7 @@
                       th:text="${s.name + ' · ' + s.period}">이름</option>
             </select>
             <a class="btn btn-ghost btn-sm" th:href="@{/datasets/{id}(id=${d.summary.id})}">상세 →</a>
+            <a class="btn btn-ghost btn-sm" th:href="@{/datasets/{id}/features(id=${d.summary.id})}">🔎 변수별 설명 · 그래프 →</a>
           </div>
         </div>
         <div class="prop">

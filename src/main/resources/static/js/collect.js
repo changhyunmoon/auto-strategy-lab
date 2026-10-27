@@ -130,6 +130,7 @@ $(function () {
         $('#progressBox').show();
         $('#failBox, #doneBox').hide();
         $('#doneLink').attr('href', '/datasets/' + res.datasetId);
+        $('#cancelBtn').attr('data-cancel-job', res.jobId).prop('disabled', false).text('■ 중지').show();
         $('html, body').animate({ scrollTop: $('#progressBox').offset().top - 60 }, 300);
         poll(res.jobId);
       })
@@ -147,6 +148,7 @@ $(function () {
         setTimeout(function () { poll(jobId); }, 2000);
       } else {
         running = false;
+        $('#cancelBtn').hide();
         $('#submitBtn').text('받기');
         updateSummary();
       }

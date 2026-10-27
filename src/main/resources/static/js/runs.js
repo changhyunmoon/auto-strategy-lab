@@ -54,6 +54,9 @@ $(function () {
     var $tb = $('#runTable tbody').empty();
     list.forEach(function (r) {
       var $tr = $('<tr class="clickable"></tr>').attr('data-id', r.id);
+      $tr.append($('<td></td>').append(r.busy
+        ? $('<span class="faint small" title="실행 중 · 대기 중인 실험은 끝난 뒤에 지울 수 있습니다">–</span>')
+        : $('<input type="checkbox" class="form-check-input run-check">').attr('aria-label', r.name + ' 선택').prop('checked', !!picked[r.id])));
       $tr.append($('<td></td>').append($('<span class="row-title"></span>').text(r.name)));
       $tr.append($('<td></td>').append($('<span class="tag"></span>').text(r.modelLabel)).attr('title', r.trainUnit + ' · ' + r.balance));
       $tr.append($('<td class="muted small"></td>').text(r.trainingSetName));
@@ -80,6 +83,7 @@ $(function () {
       $tr.append($('<td></td>').append(r.busy ? '' : '<button class="btn btn-danger-ghost btn-sm del">삭제</button>'));
       $tb.append($tr);
     });
+    syncPicked();
     $('#emptyBox').toggle(all.length === 0);
     $('#runTable').closest('.db-table-wrap').toggle(all.length > 0);
     // 정렬 표시는 별도 칸에만 쓴다 (제목 글자를 다시 쓰면 ⓘ 도움말 버튼이 지워진다)
@@ -173,8 +177,48 @@ $(function () {
     if (k === sortKey) sortDesc = !sortDesc; else { sortKey = k; sortDesc = k !== 'valLogLoss'; }
     render();
   });
+  // ---------- 여러 개 골라 지우기 ----------
+  var picked = {};
+  function syncPicked() {
+    // 목록에서 사라졌거나 실행 중이 된 실험은 선택에서 뺀다
+    var deletable = {};
+    all.forEach(function (r) { if (!r.busy) deletable[r.id] = true; });
+    Object.keys(picked).forEach(function (id) { if (!deletable[id]) delete picked[id]; });
+    var n = Object.keys(picked).length;
+    $('#bulkDelete').prop('disabled', n === 0).text(n ? '선택한 실험 삭제 (' + n + ')' : '선택한 실험 삭제');
+    var $checks = $('#runTable .run-check');
+    $('#checkAllRuns').prop('checked', $checks.length > 0 && $checks.filter(':checked').length === $checks.length);
+  }
+  $('#runTable').on('change', '.run-check', function () {
+    var id = $(this).closest('tr').data('id');
+    if (this.checked) picked[id] = true; else delete picked[id];
+    syncPicked();
+  });
+  $('#checkAllRuns').on('change', function () {
+    var on = this.checked;
+    $('#runTable .run-check').each(function () {
+      var id = $(this).closest('tr').data('id');
+      this.checked = on;
+      if (on) picked[id] = true; else delete picked[id];
+    });
+    syncPicked();
+  });
+  $('#bulkDelete').on('click', function () {
+    var ids = Object.keys(picked).map(Number);
+    if (!ids.length) return;
+    var names = all.filter(function (r) { return picked[r.id]; }).map(function (r) { return '· #' + r.id + ' ' + r.name; });
+    if (!window.confirm('실험 ' + ids.length + '개를 지울까요? 저장된 모델 · 예측 · 결과 파일도 함께 지워지고 되돌릴 수 없습니다.\n\n'
+      + names.slice(0, 15).join('\n') + (names.length > 15 ? '\n… 외 ' + (names.length - 15) + '개' : ''))) return;
+    $('#bulkDelete').prop('disabled', true).text('지우는 중…');
+    App.api('POST', '/api/runs/delete', { ids: ids }).done(function (res) {
+      picked = {};
+      App.toast(res.deleted.length + '개를 삭제했습니다.' + (res.skipped.length ? ' (실행 중이라 건너뜀 ' + res.skipped.length + '개)' : ''));
+      load();
+    }).always(syncPicked);
+  });
+
   $('#runTable').on('click', 'tr.clickable', function (e) {
-    if ($(e.target).closest('button').length) return;
+    if ($(e.target).closest('button, input').length) return;
     location.href = '/runs/' + $(this).data('id');
   });
   $('#runTable').on('click', '.del', function () {

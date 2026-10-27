@@ -336,3 +336,51 @@
 .gl-pop .gl-title { font-weight: 600; color: var(--text); font-size: 13px; margin-bottom: 4px; }
 .gl-pop .gl-row + .gl-row { margin-top: 3px; }
 .gl-pop .gl-row b { color: var(--text); font-weight: 600; margin-right: 2px; }
+
+/* ---------- 변수 탐색 (datasets/features) ---------- */
+.feat-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; align-items: start; }
+.feat-nav {
+  position: sticky; top: 56px; max-height: calc(100vh - 72px); overflow-y: auto;
+  border-right: 1px solid var(--line); padding-right: 12px;
+}
+.feat-nav .form-control { margin-bottom: 8px; }
+.feat-nav-title { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); padding: 10px 8px 2px; }
+.feat-nav-item {
+  display: flex; flex-direction: column; padding: 4px 8px; border-radius: var(--radius-sm); line-height: 1.35;
+}
+.feat-nav-item:hover { background: var(--bg-hover); }
+.feat-nav-item.active { background: var(--accent-soft); }
+.feat-nav-item .mono { color: var(--text); }
+.feat-nav-sub { font-size: 11.5px; color: var(--text-secondary); }
+.feat-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 10px; }
+.feat-name { font-size: 22px; font-weight: 700; margin: 0; }
+.feat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.feat-title { font-weight: 600; }
+.feat-doc { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
+.feat-summary { font-size: 15px; font-weight: 500; margin: 0 0 10px; }
+.feat-dl { display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; margin: 0; font-size: 13.5px; }
+.feat-dl dt { color: var(--text-secondary); font-weight: 500; }
+.feat-dl dd { margin: 0; }
+.feat-dl dd.mono-inline { font-family: var(--font-mono); font-size: 12.5px; background: var(--bg-sidebar); padding: 2px 6px; border-radius: var(--radius-sm); }
+.feat-insights { margin-bottom: 8px; }
+.feat-insights-title { font-weight: 600; margin-bottom: 4px; }
+.feat-insights ul { margin: 0 0 6px; padding-left: 18px; }
+.feat-insights li { margin: 2px 0; }
+.feat-section { margin-top: 22px; min-width: 0; }
+.feat-section .section-title { margin-top: 0; font-size: 16px; }
+.feat-howto { font-size: 12.5px; color: var(--text-secondary); margin: -2px 0 8px; }
+.corr-bar { display: block; height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden; }
+.corr-bar > span { display: block; height: 100%; opacity: .7; }
+@media (max-width: 900px) {
+  .feat-layout { grid-template-columns: 1fr; }
+  .feat-nav { position: static; max-height: 260px; border-right: none; border-bottom: 1px solid var(--line); padding: 0 0 8px; }
+}
+
+/* ---------- 거래 성과: 주문 방식 비교 ---------- */
+.db-table tr.row-selected td { background: var(--accent-soft); }
+.dot-mark { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; }
+
+/* ---------- 마우스만 올려도 설명 (glossary.js data-hover-term) ---------- */
+[data-hover-term] { cursor: help; }
+.check-row[data-hover-term] .name, .hover-name { text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+.gl-pop .gl-row { white-space: pre-line; }

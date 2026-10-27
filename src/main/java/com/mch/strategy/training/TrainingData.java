@@ -34,6 +34,9 @@ public final class TrainingData implements AutoCloseable {
     public final float[] previous;
     /** 판단 봉 종가 (거래 성과 계산용) */
     public final float[] close;
+    /** 판단 봉 고가 · 저가 (지정가 체결 판단용). 예전 학습 데이터면 null */
+    public final float[] high;
+    public final float[] low;
     /** 행마다의 정답 기준 % */
     public final float[] threshold;
     /** 정답 예측 기간 N봉 · 판단 간격(분) */
@@ -74,6 +77,10 @@ public final class TrainingData implements AutoCloseable {
         this.previous = readFloats(dir.resolve(TrainingFiles.PREVIOUS));
         this.close = readFloats(dir.resolve(TrainingFiles.CLOSE));
         this.threshold = readFloats(dir.resolve(TrainingFiles.THRESHOLD));
+        Path highFile = dir.resolve(TrainingFiles.HIGH), lowFile = dir.resolve(TrainingFiles.LOW);
+        boolean hasRange = Files.exists(highFile) && Files.exists(lowFile);
+        this.high = hasRange ? readFloats(highFile) : null;
+        this.low = hasRange ? readFloats(lowFile) : null;
         if (label.length != rows || time.length != rows || forward.length != rows) {
             throw new IllegalStateException("학습 데이터 파일의 행 수가 맞지 않습니다. 학습 데이터를 다시 만들어 주세요.");
         }

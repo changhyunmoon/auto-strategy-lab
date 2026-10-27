@@ -123,7 +123,8 @@
       <div class="callout callout-yellow" style="margin-bottom:14px">
         <div class="callout-icon">⚠️</div>
         <div class="callout-body small">
-          예측을 매매 규칙으로 바꿔 계산한 <span data-term="backtest">과거 거래 성과</span>입니다. 판단 봉 종가에 바로 체결된다고 가정하고 매번 수수료 + 슬리피지를 뺍니다.
+          예측을 매매 규칙으로 바꿔 계산한 <span data-term="backtest">과거 거래 성과</span>입니다. <b>시장가</b>는 판단 봉 종가에 바로 체결된다고 보고 매번 수수료 + 슬리피지를 빼고,
+          <b>지정가</b>는 그 종가에 주문을 걸어 두고 다음 봉들에서 실제로 그 가격을 넘어섰을 때만 체결된다고 봅니다.
           <b>숏은 참고용</b>입니다 (업비트 원화 현물은 공매도 불가). 규칙 · 기준을 이 화면에서 여러 번 바꿔 고를수록 검증 구간에 맞춘 운이 섞입니다.
         </div>
       </div>
@@ -134,13 +135,27 @@
             <label class="chip" id="btTestChip"><input type="radio" name="btSplit" value="test">최종 테스트</label>
           </div>
         </div>
+        <div class="prop"><div class="prop-label"><span class="prop-icon">🧾</span>주문 방식</div>
+          <div class="prop-value">
+            <span class="chip-group">
+              <label class="chip"><input type="radio" name="btOrder" value="MARKET" checked><span data-term="marketOrder">시장가</span></label>
+              <label class="chip"><input type="radio" name="btOrder" value="LIMIT"><span data-term="limitOrder">지정가</span></label>
+            </span>
+            <span class="bt-limit" style="display:none">
+              <span class="small muted" style="margin-left:8px" data-term="limitWait">체결 대기</span>
+              <input type="number" class="form-control" id="btWait" value="1" step="1" min="1" max="60" style="width:80px"><span class="small muted">봉</span>
+            </span>
+            <div class="hint" id="btOrderHint">시장가: 바로 체결 · 수수료 + 슬리피지. 지정가: 슬리피지 없음 · 수수료만, 대신 가격이 안 오면 체결되지 않습니다. 결과 아래에서 두 방식을 함께 비교합니다.</div>
+          </div>
+        </div>
         <div class="prop"><div class="prop-label"><span class="prop-icon">💸</span>비용 (한쪽)</div>
           <div class="prop-value">
             <span class="small muted" data-term="fee">수수료</span>
             <input type="number" class="form-control" id="btFee" value="0.05" step="0.01" min="0" max="1" style="width:90px"><span class="small muted">%</span>
             <span class="small muted" style="margin-left:8px" data-term="slippage">슬리피지</span>
             <input type="number" class="form-control" id="btSlip" value="0.02" step="0.01" min="0" max="1" style="width:90px"><span class="small muted">%</span>
-            <div class="hint">업비트 원화 마켓 기본 수수료는 한쪽 0.05% 입니다. 한 번 사고 팔면 (수수료 + 슬리피지) × 2 가 빠집니다.</div>
+            <div class="hint">업비트 원화 마켓 일반 주문(시장가 · 지정가) 수수료는 한쪽 0.05% 입니다. 시장가로 사고 팔면 (수수료 + 슬리피지) × 2, 지정가로 둘 다 체결되면 수수료 × 2 가 빠집니다.
+              업비트 「예약 주문」(감시가)은 수수료가 다를 수 있으니 계정에서 확인하세요.</div>
           </div>
         </div>
         <div class="prop"><div class="prop-label"><span class="prop-icon">🚦</span>진입 규칙</div>

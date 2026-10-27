@@ -73,7 +73,7 @@ class TemplateRenderTest {
 
         String html = render("collect/index", m);
         assertThat(html).contains("데이터 가져오기", "data-code=\"BTC\"", "업비트 1분봉", "바이낸스 1분봉",
-                "data-requires=\"BOTH_EXCHANGES\"", "A. 수익률·모멘텀", "/js/collect.js", "class=\"sidebar\"",
+                "data-requires=\"BOTH_EXCHANGES\"", "A. 수익률·모멘텀", "data-hover-term=\"feat_log_return\"", "data-hover-term=\"grp_A\"", "cancelBtn", "/js/collect.js", "class=\"sidebar\"",
                 "nav-item active");
         assertThat(html).contains("<title>데이터 가져오기 · 자동 전략 탐색</title>");
     }
@@ -89,7 +89,7 @@ class TemplateRenderTest {
                 "/viz?datasetId=3", "/collect?copy=3", "previewTable");
 
         m.put("d", detail("COMPUTING"));
-        assertThat(render("datasets/detail", m)).contains("buildingBox", "tag-blue").doesNotContain("previewTable");
+        assertThat(render("datasets/detail", m)).contains("buildingBox", "tag-blue", "data-cancel-job=\"9\"").doesNotContain("previewTable");
     }
 
     @Test
@@ -104,6 +104,31 @@ class TemplateRenderTest {
         Map<String, Object> empty = base("viz");
         empty.put("datasets", List.of());
         assertThat(render("viz/index", empty)).contains("완료된 데이터세트가 없습니다");
+    }
+
+    @Test
+    void feature_explore_page() {
+        Map<String, Object> m = base("features");
+        Detail d = detail("READY");
+        m.put("datasets", List.of(d.summary()));
+        m.put("d", d);
+        m.put("navGroups", List.of(
+                Map.of("code", "-", "label", "봉 값", "columns", d.columns().subList(0, 2)),
+                Map.of("code", "C", "label", "C. 범위 안의 위치·강도", "columns", d.columns().subList(2, 3))));
+        m.put("groupLabels", Map.of("C", "범위 안의 위치·강도"));
+        m.put("docs", Map.of("rsi_14", com.mch.strategy.feature.FeatureDocs.find("rsi_14").orElseThrow()));
+        m.put("selected", "rsi_14");
+        String html = render("datasets/features", m);
+        assertThat(html).contains("변수 탐색", "data-selected=\"rsi_14\"", "/datasets/3/features?col=rsi_14",
+                "feat-nav-item active", "C. 범위 안의 위치·강도", "/js/feature-explore.js", "nav-item active",
+                "\"refLines\":[0.3,0.5,0.7]"); // 설명이 JS 변수로 들어간다
+
+        m.put("d", detail("COMPUTING"));
+        assertThat(render("datasets/features", m)).contains("완료된 데이터세트만").doesNotContain("feature-explore.js");
+
+        Map<String, Object> empty = base("features");
+        empty.put("datasets", List.of());
+        assertThat(render("datasets/features", empty)).contains("완료된 데이터세트가 없습니다");
     }
 
     @Test

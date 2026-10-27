@@ -116,6 +116,8 @@ public class TrainingSetBuilder {
              BinaryColumnWriter ff = new BinaryColumnWriter(dir.resolve(TrainingFiles.FORWARD));
              BinaryColumnWriter fp = new BinaryColumnWriter(dir.resolve(TrainingFiles.PREVIOUS));
              BinaryColumnWriter fc = new BinaryColumnWriter(dir.resolve(TrainingFiles.CLOSE));
+             BinaryColumnWriter fhi = new BinaryColumnWriter(dir.resolve(TrainingFiles.HIGH));
+             BinaryColumnWriter flo = new BinaryColumnWriter(dir.resolve(TrainingFiles.LOW));
              BinaryColumnWriter fth = new BinaryColumnWriter(dir.resolve(TrainingFiles.THRESHOLD))) {
 
             int assetCount = ts.getAssetIds().size();
@@ -141,8 +143,8 @@ public class TrainingSetBuilder {
 
                 jobService.update(jobId, base + span / 2, code + " 정답 · 구간 계산", null);
                 double[] close = rows.column(closeIndex);
-                TrainingRows.Calculator calc = new TrainingRows.Calculator(rows.time(), close,
-                        rows.column(highIndex), rows.column(lowIndex), decisionMs);
+                double[] high = rows.column(highIndex), low = rows.column(lowIndex);
+                TrainingRows.Calculator calc = new TrainingRows.Calculator(rows.time(), close, high, low, decisionMs);
                 TrainingRows.Plan[] plan = TrainingRows.plan(calc, ranges, spec);
 
                 for (int i = 0; i < plan.length; i++) {
@@ -172,6 +174,8 @@ public class TrainingSetBuilder {
                     ff.writeFloat(p.forwardPct());
                     fp.writeFloat(p.previousLabel());
                     fc.writeFloat(close[i]);
+                    fhi.writeFloat(high[i]);
+                    flo.writeFloat(low[i]);
                     fth.writeFloat(p.thresholdPct());
                     stats.row(p, a, rows.time()[i], calc, i);
                     written++;

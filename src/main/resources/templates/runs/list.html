@@ -32,6 +32,8 @@
       <label class="chip"><input type="radio" name="status" value="RUNNING">진행 · 대기 <span class="chip-sub" data-count="RUNNING"></span></label>
       <label class="chip"><input type="radio" name="status" value="FAILED">실패 <span class="chip-sub" data-count="FAILED"></span></label>
     </span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-danger-ghost btn-sm" id="bulkDelete" disabled>선택한 실험 삭제</button>
   </div>
 
   <div id="compareBox" style="display:none">
@@ -54,6 +56,7 @@
     <table class="db-table" id="runTable">
       <thead>
       <tr>
+        <th style="width:28px"><input type="checkbox" class="form-check-input" id="checkAllRuns" title="보이는 실험 모두 선택" aria-label="모두 선택"></th>
         <th><span class="th-icon">Aa</span>실험</th>
         <th>모델</th>
         <th>학습 데이터</th>

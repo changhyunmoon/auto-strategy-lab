@@ -28,6 +28,7 @@ import com.mch.strategy.instrument.AssetRepository;
 import com.mch.strategy.instrument.Exchange;
 import com.mch.strategy.instrument.Market;
 import com.mch.strategy.instrument.MarketRepository;
+import com.mch.strategy.job.JobCancels;
 import com.mch.strategy.job.JobService;
 
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class DatasetBuilder {
     private final DatasetRowRepository rowRepository;
     private final DatasetStateService state;
     private final JobService jobService;
+    private final JobCancels cancels;
 
     @Async(AsyncConfigNames.JOB_EXECUTOR)
     public void build(long datasetId, long jobId) {
@@ -62,11 +64,18 @@ public class DatasetBuilder {
             jobService.start(jobId);
             run(datasetId, progress);
             jobService.succeed(jobId);
+        } catch (JobCancels.CancelledException e) {
+            log.info("데이터세트 {} 만들기를 사용자가 중지했습니다.", datasetId);
+            String message = "중지했습니다. 지금까지 받은 1분봉은 저장되어 있고, 다시 만들 때 겹치는 봉은 중복 저장하지 않습니다.";
+            state.fail(datasetId, message);
+            jobService.fail(jobId, message);
         } catch (Exception e) {
             log.error("데이터세트 {} 만들기 실패", datasetId, e);
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             state.fail(datasetId, message);
             jobService.fail(jobId, message);
+        } finally {
+            cancels.clear(jobId);
         }
     }
 
@@ -136,7 +145,7 @@ public class DatasetBuilder {
                 for (FeatureDefinition f : features) {
                     values.putAll(f.compute(input));
                 }
-                rowCount += writeRows(datasetId, assetId, interval, prim, columns, values, ds.getRangeFrom(), fullPrecision);
+                rowCount += writeRows(datasetId, assetId, interval, prim, columns, values, ds.getRangeFrom(), fullPrecision, progress);
                 step++;
             }
         }
@@ -185,7 +194,7 @@ public class DatasetBuilder {
     /** 열 순서대로 한 행씩 JSON 배열을 만들어 저장한다. 저장한 행 중 워밍업이 아닌 행 수를 돌려준다. */
     private long writeRows(long datasetId, long assetId, String interval, CandleSeries bars,
                            List<DatasetColumn> columns, Map<String, double[]> featureValues,
-                           Instant rangeFrom, int fullPrecision) {
+                           Instant rangeFrom, int fullPrecision, Progress progress) {
         double[][] byColumn = new double[columns.size()][];
         for (DatasetColumn c : columns) {
             double[] values = c.isBar() ? DatasetColumns.barValues(bars, c.getColumnName()) : featureValues.get(c.getColumnName());
@@ -208,6 +217,7 @@ public class DatasetBuilder {
             }
             chunk.add(new DatasetRowRepository.RowInsert(bars.time()[i], warmup, JsonArrays.write(row, fullPrecision)));
             if (chunk.size() == INSERT_CHUNK) {
+                progress.checkCancel();
                 rowRepository.insert(datasetId, assetId, interval, chunk);
                 chunk.clear();
             }
@@ -243,12 +253,18 @@ public class DatasetBuilder {
         }
 
         void set(int percent, String step, String message, boolean force) {
+            checkCancel();
             long now = System.currentTimeMillis();
             if (!force && now - lastSaved < 1000) {
                 return;
             }
             lastSaved = now;
             jobService.update(jobId, percent, step, message);
+        }
+
+        /** 「중지」를 눌렀으면 여기서 멈춘다 */
+        void checkCancel() {
+            cancels.check(jobId);
         }
     }
 }

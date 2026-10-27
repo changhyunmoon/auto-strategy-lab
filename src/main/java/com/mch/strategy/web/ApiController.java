@@ -28,6 +28,7 @@ import com.mch.strategy.instrument.AssetRepository;
 import com.mch.strategy.instrument.Market;
 import com.mch.strategy.instrument.MarketRepository;
 import com.mch.strategy.job.JobService;
+import com.mch.strategy.viz.FeatureProfileService;
 import com.mch.strategy.viz.VizService;
 
 import jakarta.validation.Valid;
@@ -42,7 +43,9 @@ public class ApiController {
     private final DatasetService datasetService;
     private final DatasetQueryService datasetQueryService;
     private final JobService jobService;
+    private final com.mch.strategy.job.JobCancels jobCancels;
     private final VizService vizService;
+    private final FeatureProfileService featureProfileService;
     private final CandleRepository candleRepository;
     private final MarketRepository marketRepository;
     private final AssetRepository assetRepository;
@@ -77,6 +80,17 @@ public class ApiController {
     @GetMapping("/jobs/{id}")
     public Map<String, Object> job(@PathVariable long id) {
         return jobService.view(id);
+    }
+
+    /** 진행 중인 데이터세트 만들기(수집 · 지표 계산)를 멈춘다. 몇 초 안에 다음 확인 지점에서 멈춘다. */
+    @PostMapping("/jobs/{id}/cancel")
+    public Map<String, Object> cancelJob(@PathVariable long id) {
+        Map<String, Object> job = jobService.view(id);
+        if (!"RUNNING".equals(job.get("status"))) {
+            throw ApiException.badRequest("이미 끝난 작업입니다.");
+        }
+        jobCancels.request(id);
+        return Map.of("id", id, "cancelRequested", true);
     }
 
     // ---------- 데이터세트 ----------
@@ -141,6 +155,14 @@ public class ApiController {
                                        @RequestParam String interval,
                                        @RequestParam String x, @RequestParam String y) {
         return vizService.scatter(id, assetId, interval, x, y);
+    }
+
+    /** 변수 탐색: 한 열의 분포 · N봉 뒤 수익률과의 관계 · 지속성 · 시간대 · 관련 변수 */
+    @GetMapping("/viz/{id}/profile")
+    public Map<String, Object> profile(@PathVariable long id, @RequestParam long assetId,
+                                       @RequestParam String interval, @RequestParam String column,
+                                       @RequestParam(required = false) Integer horizon) {
+        return featureProfileService.profile(id, assetId, interval, column, horizon);
     }
 
     @GetMapping("/viz/{id}/quality")

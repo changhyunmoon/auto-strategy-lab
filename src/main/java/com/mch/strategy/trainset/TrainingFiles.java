@@ -22,6 +22,9 @@ public final class TrainingFiles {
     public static final String PREVIOUS = "previous.f32";
     /** 판단 봉 종가 float32 — 거래 성과(백테스트) 계산용. 입력 열이 아니다 */
     public static final String CLOSE = "close.f32";
+    /** 판단 봉 고가 · 저가 float32 — 지정가 체결 판단용. 입력 열이 아니다. 예전 학습 데이터에는 없다 */
+    public static final String HIGH = "high.f32";
+    public static final String LOW = "low.f32";
     /** 이 행의 정답 기준 float32 (%) — 변동성 기준이면 행마다 다르다 */
     public static final String THRESHOLD = "threshold.f32";
     /** 파일 형식 버전. 2 = N봉 정답 · 종가 · 기준 파일 추가 */

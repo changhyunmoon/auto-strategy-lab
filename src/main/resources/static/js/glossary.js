@@ -21,7 +21,13 @@ var Glossary = (function ($) {
     volThreshold: { t: '변동성 기준', def: '최근 변동성에 비례해 행마다 기준을 바꿉니다.', calc: '기준(%) = 최근 W봉 1봉 수익률의 표준편차 × k × √N', use: '시장이 조용할 땐 기준이 작아지고 급변할 땐 커져서, 시기마다 정답 비율이 덜 흔들립니다.', warn: '과거 W봉만으로 계산합니다. 과거 봉이 부족한 데이터 앞부분은 빠집니다.' },
     costThreshold: { t: '비용 기준', def: '왕복 거래 비용보다 크게 움직인 경우만 상승 · 하락으로 봅니다.', calc: '기준(%) = (수수료 + 슬리피지) × 2 + 여유', ex: '수수료 0.05% · 슬리피지 0.02% · 여유 0.1% → 기준 0.24%', use: '「맞혀도 수수료 때문에 손해인」 작은 움직임을 정답에서 뺍니다.' },
     fee: { t: '수수료', def: '한 번 사거나 팔 때 거래소가 가져가는 비율입니다 (한쪽 기준).', ex: '업비트 원화 마켓 기본 0.05% — 사고 팔면 약 0.1%.', warn: '계정 등급 · 이벤트에 따라 실제 수수료가 다를 수 있습니다.' },
-    slippage: { t: '슬리피지', def: '주문한 가격과 실제 체결 가격의 차이로 생기는 추가 비용입니다 (한쪽 기준).', use: '봉 종가에 바로 체결된다는 가정의 낙관을 줄이려고 넣습니다.', warn: '실제 값은 주문 크기 · 호가 두께에 따라 다릅니다. 이 시스템은 호가를 쓰지 않으므로 가정값입니다.' },
+    slippage: { t: '슬리피지', def: '생각한 가격(여기서는 판단 봉 종가)과 실제 체결 가격의 차이로 생기는 추가 비용입니다 (한쪽 기준).', calc: '생기는 이유: ① 호가 차이 — 시장가로 사면 파는 쪽 가장 싼 호가에, 팔면 사는 쪽 가장 비싼 호가에 체결 ② 주문이 크면 다음 호가까지 먹음 ③ 봉이 끝나고 주문이 들어가기까지 몇 초 사이의 가격 변화', ex: '1억 1,000만 원이라 생각하고 시장가로 샀는데 1억 1,002만 원에 체결 → 약 0.02%', use: '시장가 계산에서 「종가에 바로 체결」이라는 낙관을 줄이려고 넣습니다. 지정가는 정한 가격에만 체결되므로 슬리피지가 없습니다.', warn: '이 시스템은 호가를 쓰지 않으므로 가정값입니다. 큰 금액 · 급변 구간 · 거래가 적은 코인에서는 더 커집니다.' },
+    marketOrder: { t: '시장가 주문', def: '가격을 정하지 않고 지금 호가에 바로 사고파는 주문입니다.', read: '항상 체결되지만 슬리피지가 생깁니다. 계산: 판단 봉 종가 + 수수료 + 슬리피지.' },
+    limitOrder: { t: '지정가 주문', def: '원하는 가격을 정해 걸어 두고, 시장 가격이 그 가격에 와야 체결되는 주문입니다.', calc: '판단 봉 종가에 주문 → 다음 봉부터 정한 봉 수 안에 매수는 저가 < 주문가, 매도는 고가 > 주문가 이면 주문가에 체결. 비용은 수수료만.', read: '슬리피지는 없지만 가격이 안 오면 체결되지 않습니다. 바로 오르는 좋은 신호일수록 놓치기 쉽습니다.', warn: '주문가에 딱 닿기만 한 경우는 앞선 주문 때문에 체결 안 될 수 있어 미체결로 봅니다 (보수적 가정). 부분 체결은 따로 보지 않습니다.' },
+    limitWait: { t: '체결 대기 봉 수', def: '지정가 주문을 몇 봉까지 기다릴지입니다.', read: '길수록 체결은 잘 되지만, 늦게 체결될수록 판단했을 때와 상황이 달라집니다.', calc: '진입: 기다려도 안 되면 취소(놓친 거래). 청산: 기다려도 안 되면 마지막 봉 종가에 시장가로 매도(슬리피지 포함).' },
+    limitFill: { t: '진입 체결률', def: '지정가 진입 주문 중 실제로 체결된 비율입니다.', read: '낮으면 신호 대부분을 놓치는 것입니다. 놓친 거래가 수익 거래였는지는 시장가 결과와 비교해 봅니다.' },
+    limitFallback: { t: '청산 지정가 체결', def: '지정가 청산 주문 중 기다리는 동안 체결된 비율입니다. 나머지는 시장가로 전환해 팔았습니다.', read: '전환이 많으면 실제 왕복 비용이 수수료 × 2 보다 커집니다.' },
+    orderCompare: { t: '주문 방식 비교', def: '같은 예측과 같은 보유 규칙에서 시장가(슬리피지 포함) · 시장가(슬리피지 0) · 지정가만 바꿔 계산한 결과입니다.', use: '슬리피지가 수익을 얼마나 깎는지, 지정가로 비용을 아끼는 것이 놓친 거래보다 이득인지 판단합니다.', warn: '결과를 보고 방식을 고르면 그것도 검증 구간에 맞춘 선택입니다. 최종 테스트로 다시 확인하세요.' },
     trainSplit: { t: '학습 구간', def: '모델이 배우는 데 쓰는 기간입니다.', warn: '결측 채우기 · 표준화 기준도 이 구간으로만 계산합니다.' },
     valSplit: { t: '검증 구간', def: '모델 · 설정을 비교하고 고르는 데 쓰는 기간입니다.', warn: '여러 실험을 검증 점수로 고르면 검증 구간에 맞춘 운이 섞일 수 있어, 최종 테스트로 다시 확인합니다.' },
     testSplit: { t: '최종 테스트 구간', def: '후보를 다 고른 뒤 한 번만 확인하는 기간입니다.', use: '처음 보는 데이터에서도 성능이 유지되는지 봅니다.', warn: '결과를 보고 설정을 바꾸면 더 이상 「처음 보는 데이터」가 아닙니다. 실행 횟수가 기록됩니다.' },
@@ -78,6 +84,19 @@ var Glossary = (function ($) {
     flip: { t: '반대 신호', def: '보유 중 반대 방향 신호가 나오면 청산하고 반대 포지션으로 들어갑니다 (양쪽 비용 발생).' },
     sweep: { t: '확률 기준별 비교', def: '같은 비용 · 보유 규칙에서 확률 기준만 바꿔 거래 성과를 계산한 표입니다.', warn: '가장 좋은 기준을 골라 쓰면 그 자체가 과적합입니다. 검증 구간에서만 고르고, 최종 테스트로 확인하세요.' },
     // ---------- 데이터세트 · 시각화 ----------
+    valueBuckets: { t: '값 구간별 N봉 뒤 수익률', def: '변수 값을 낮은 순으로 10구간(10분위)으로 나누고, 구간마다 다음 N봉 동안 가격이 평균 얼마나 움직였는지 · 오른 비율이 얼마였는지 본 것입니다.', calc: 'N봉 뒤 수익률 = (N봉 뒤 종가 ÷ 지금 종가 − 1) × 100. 사이에 빈 구간이 있는 봉은 뺍니다.', read: '막대가 왼쪽에서 오른쪽으로 꾸준히 커지면 「값이 클수록 오른다」, 작아지면 「값이 클수록 내린다」는 관계입니다. 양 끝만 튀면 극단값에서만 의미가 있는 변수입니다.', warn: '데이터세트 전체 기간의 과거 통계입니다. 차이가 왕복 수수료보다 작으면 실제 수익으로 이어지기 어렵습니다.' },
+    ic: { t: 'IC (정보 계수)', def: '변수 값과 N봉 뒤 수익률의 순위 상관(스피어만)입니다.', read: '−1 ~ +1. 짧은 기간 가격 예측에서는 0.02 만 넘어도 의미가 있을 수 있고, 0.05 이상이면 뚜렷한 편입니다. 0.1 을 넘으면 데이터 누출(미래 정보 사용)을 먼저 의심하세요.', ex: 'IC −0.04 → 값이 클수록 이후 수익률이 낮았던(되돌림) 경향' },
+    acf: { t: '자기상관', def: '변수의 지금 값과 k봉 뒤 값 사이의 상관입니다.', read: '1 에 가까우면 값이 천천히 바뀌고(상태 · 국면), 0 근처면 봉마다 새로 바뀝니다(잡음 · 순간 신호).', use: '느리게 변하는 변수는 「지금 어떤 시장인지」, 빠르게 변하는 변수는 「지금 무슨 일이 일어났는지」를 알려 줍니다.' },
+    src_UPBIT: { t: '업비트 1분봉', def: '업비트 원화 마켓(KRW-BTC 등)의 1분 단위 시가 · 고가 · 저가 · 종가 · 거래량입니다.', use: '실제로 거래할 시장이라 데이터세트의 가격 · 정답 · 백테스트는 이 값으로 계산합니다.', warn: '업비트는 거래가 없던 분에 봉이 없어 빈 구간이 생길 수 있습니다. 2년치는 시장 하나에 약 5,000번 요청해야 해서 수십 분 걸립니다.' },
+    src_BINANCE: { t: '바이낸스 1분봉', def: '바이낸스 USDT 마켓(BTCUSDT 등)의 1분봉입니다. 매수 주도 거래량 · 체결 건수가 함께 옵니다.', use: '세계 최대 거래소의 움직임을 참고 정보로 씁니다 (매수 주도 비율 · 평균 체결 크기 · 업비트 거래량 비중 · 바이낸스 선행 수익률). 업비트를 고르지 않으면 바이낸스 가격이 주 가격이 됩니다.', warn: '가격 단위가 달라(원 · 달러) 수익률끼리만 비교합니다.' },
+    barInterval: { t: '봉 간격', def: '1분봉을 몇 분씩 묶어 한 봉으로 만들지입니다. 고른 간격마다 지표를 따로 계산해 저장합니다.', read: '짧을수록 행이 많고 기회가 많지만 한 번의 움직임이 작아 수수료 비중이 커집니다. 왕복 비용(약 0.14%)을 넘으려면 15분 · 60분처럼 긴 간격이 유리한 편입니다.', warn: '1분 · 5분을 긴 기간으로 만들면 행이 매우 많아져 저장 · 계산이 오래 걸립니다 (2년 1분봉 ≈ 자산당 100만 행).' },
+    grp_A: { t: 'A. 수익률 · 모멘텀', def: '최근 가격이 얼마나, 어느 방향으로 움직였는지입니다 (과거 수익률 · MACD).', use: '오른 것이 더 오르는지(모멘텀), 되돌아오는지(되돌림)를 모델이 배우게 합니다.' },
+    grp_B: { t: 'B. 추세 · 평균 대비 위치', def: '가격이 이동평균 · 거래량 가중 평균가보다 얼마나 위 · 아래인지, 평균선이 어느 쪽으로 기울었는지입니다.', use: '지금이 상승 추세인지 하락 추세인지, 평균에서 얼마나 멀어졌는지 알려 줍니다.' },
+    grp_C: { t: 'C. 범위 안의 위치 · 강도', def: '최근 범위(볼린저 밴드 · 최근 고저) 안에서 가격이 어디쯤인지, 상승 · 하락 힘의 균형(RSI)입니다.', use: '과매수 · 과매도, 돌파 직전 같은 상태를 나타냅니다.' },
+    grp_D: { t: 'D. 변동성', def: '가격이 얼마나 거칠게 움직이는지입니다 (ATR · 실현 변동성 · 밴드 폭 · 봉 고저 폭).', use: '방향은 알려 주지 않지만, 다음 움직임의 크기와 손절 · 목표가 폭을 정하는 데 중요합니다.' },
+    grp_E: { t: 'E. 거래량 · 체결 방향', def: '평소 대비 거래량, 사려는 쪽 · 팔려는 쪽 중 누가 적극적인지, 캔들 모양입니다.', use: '움직임에 거래량이 실렸는지(진짜 돌파인지) 확인합니다. 일부는 바이낸스 1분봉이 필요합니다.' },
+    grp_F: { t: 'F. 자산 · 거래소 간 관계', def: 'BTC 와 ETH 의 상대 강도 · 상관, 바이낸스 가격의 먼저 움직임입니다.', use: '한 자산 · 거래소의 움직임이 다른 쪽에 이어지는지 봅니다. BTC · ETH 둘 다, 또는 두 거래소가 모두 필요합니다.' },
+    grp_G: { t: 'G. 시간', def: '하루 중 시각(sin · cos)과 요일 · 주말 여부입니다.', use: '시간대 · 요일마다 거래량 · 변동성 성향이 다른 것을 모델이 알게 합니다.' },
     warmup: { t: '워밍업', def: '지표 계산에 필요한 과거 봉을 위해 시작일보다 앞서 받은 기간입니다.', warn: '이 행들은 학습 · 평가에서 뺍니다.' },
     fillRate: { t: '채움률', def: '예상한 분 수 중 실제로 봉이 있는 비율입니다.', read: '100% 미만이면 빈 구간이 있습니다 (점검 · 무거래 · 수집 누락).' },
     correlation: { t: '상관계수 (피어슨)', def: '두 값이 직선적인 관계로 함께 움직이는 정도입니다.', read: '−1 ~ +1. +1 에 가까우면 같은 방향, −1 에 가까우면 반대 방향입니다.', warn: '0 에 가까워도 곡선 관계가 있을 수 있습니다. 원인 · 결과나 수익을 뜻하지 않습니다.' },
@@ -90,7 +109,7 @@ var Glossary = (function ($) {
   function html(term) {
     var d = T[term];
     if (!d) return null;
-    var rows = [['정의', d.def], ['용도', d.use], ['계산', d.calc], ['값 읽기', d.read], ['예시', d.ex], ['주의', d.warn]];
+    var rows = [['정의', d.def], ['용도', d.use], ['계산', d.calc], ['값 읽기', d.read], ['예시', d.ex], ['주의', d.warn], ['만드는 열', d.cols]];
     var $b = $('<div></div>');
     $b.append($('<div class="gl-title"></div>').text(d.t));
     rows.forEach(function (r) {
@@ -99,8 +118,8 @@ var Glossary = (function ($) {
     return $b;
   }
 
-  function show(btn) {
-    var term = $(btn).data('term-key');
+  function show(btn, key) {
+    var term = key || $(btn).data('term-key');
     var content = html(term);
     if (!content) return;
     if (!$pop) $pop = $('<div class="gl-pop" role="tooltip" id="glPop"></div>').appendTo('body');
@@ -148,6 +167,54 @@ var Glossary = (function ($) {
   });
   $(document).on('keydown', function (e) { if (e.key === 'Escape') hide(); });
 
+  /* 마우스만 올려도 설명이 뜨는 요소: data-hover-term="키". 지표 목록처럼 이름 자체가 설명 대상일 때 쓴다. */
+  var hoverTimer = null;
+  $(document).on('mouseenter', '[data-hover-term]', function () {
+    var el = this, key = $(el).attr('data-hover-term');
+    if (pinned || !T[key]) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(function () { show(el, key); }, 250);
+  });
+  $(document).on('mouseleave', '[data-hover-term]', function () {
+    clearTimeout(hoverTimer);
+    if (!pinned && current === this) hide();
+  });
+
+  /**
+   * 변수(열) 설명을 용어 사전에 넣는다. docs = { 열 이름: {summary, definition, formula, reading, usage, caution} }
+   * 열 하나는 "col_열이름" 키로 들어간다.
+   */
+  function addColumnDocs(docs) {
+    Object.keys(docs || {}).forEach(function (col) {
+      var d = docs[col];
+      T['col_' + col] = { t: col, def: d.summary + ' ' + d.definition, calc: d.formula, read: d.reading, use: d.usage, warn: d.caution };
+    });
+  }
+
+  /**
+   * 지표 하나(열 여러 개)의 설명을 "feat_코드" 키로 넣는다. 열들이 같은 설명을 쓰면 그 설명을, 다르면 열마다 한 줄씩 요약한다.
+   * features = [{code, name, param, cols: [열 이름]}], docs = 열 설명 (addColumnDocs 와 같은 모양)
+   */
+  function addFeatureDocs(features, docs) {
+    (features || []).forEach(function (f) {
+      var list = (f.cols || []).map(function (c) { return docs[c]; }).filter(Boolean);
+      if (!list.length) return;
+      var same = list.every(function (d) { return d.summary === list[0].summary; });
+      var cols = f.cols.join(', ');
+      if (same) {
+        var d = list[0];
+        T['feat_' + f.code] = { t: f.name + (f.param ? ' (' + f.param + ')' : ''), def: d.summary + ' ' + d.definition,
+          calc: d.formula, read: d.reading, use: d.usage, warn: d.caution, cols: cols };
+      } else {
+        T['feat_' + f.code] = { t: f.name + (f.param ? ' (' + f.param + ')' : ''),
+          def: f.cols.map(function (c) { return docs[c] ? c + ' — ' + docs[c].summary : c; }).join('\n'),
+          calc: f.cols.map(function (c) { return docs[c] ? c + ': ' + docs[c].formula : ''; }).filter(Boolean).join('\n'),
+          use: list[0].usage, warn: list.map(function (d) { return d.caution; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; }).join(' '),
+          cols: cols };
+      }
+    });
+  }
+
   $(function () {
     attach(document);
     var timer = null;
@@ -157,5 +224,5 @@ var Glossary = (function ($) {
     }).observe(document.body, { childList: true, subtree: true });
   });
 
-  return { attach: attach, terms: T };
+  return { attach: attach, terms: T, addColumnDocs: addColumnDocs, addFeatureDocs: addFeatureDocs };
 })(jQuery);
