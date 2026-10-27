@@ -63,7 +63,11 @@
 
   <div th:if="${t.summary.building}" style="margin-top:24px" id="buildingBox">
     <div class="progress-thin"><span id="progressBar" th:style="${'width:' + t.summary.progress + '%'}"></span></div>
-    <div class="small muted" style="margin-top:6px" id="progressText" th:text="${t.summary.progress + '% · ' + t.summary.step}"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <span class="small muted" id="progressText" th:text="${t.summary.progress + '% · ' + t.summary.step}"></span>
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn-danger-ghost btn-sm" th:if="${t.summary.jobId != null}" th:attr="data-cancel-job=${t.summary.jobId}">■ 중지</button>
+    </div>
   </div>
 
   <div style="margin:20px 0 4px;display:flex;gap:8px" th:if="${t.summary.status == 'READY'}">

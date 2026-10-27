@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -56,6 +57,11 @@ public class DatasetRowRepository {
 
     /** 시각화용: 워밍업을 뺀 [from, to) 구간 전체. from·to 가 null 이면 끝까지. */
     public Rows load(long datasetId, long assetId, String interval, Instant from, Instant to) {
+        return load(datasetId, assetId, interval, from, to, null);
+    }
+
+    /** onProgress: 5만 행마다 지금까지 읽은 행 수를 알려준다 (진행률 · 중지 확인용, 예외를 던지면 읽기를 멈춘다) */
+    public Rows load(long datasetId, long assetId, String interval, Instant from, Instant to, IntConsumer onProgress) {
         List<Long> times = new ArrayList<>();
         List<double[]> values = new ArrayList<>();
         jdbc.query("""
@@ -66,6 +72,9 @@ public class DatasetRowRepository {
                 """, rs -> {
             times.add(rs.getTimestamp(1).toInstant().toEpochMilli());
             values.add(JsonArrays.read(rs.getString(2)));
+            if (onProgress != null && times.size() % 50_000 == 0) {
+                onProgress.accept(times.size());
+            }
         }, datasetId, assetId, interval,
                 Timestamp.from(from == null ? Instant.EPOCH : from),
                 Timestamp.from(to == null ? Instant.parse("9999-01-01T00:00:00Z") : to));

@@ -76,7 +76,11 @@
 
   <div id="trainProgress" style="display:none;margin-top:24px">
     <div class="progress-thin"><span id="trainBar"></span></div>
-    <div class="small muted" style="margin-top:6px" id="trainText"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <span class="small muted" id="trainText"></span>
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn-danger-ghost btn-sm" th:if="${r.summary.jobId != null}" th:attr="data-cancel-job=${r.summary.jobId}">■ 학습 중지</button>
+    </div>
   </div>
 
   <div data-tabs-scope style="margin-top:28px" th:if="${r.summary.status == 'READY'}">
@@ -110,7 +114,11 @@
       </div>
       <div id="testProgress" style="display:none;margin-top:14px">
         <div class="progress-thin"><span id="testBar"></span></div>
-        <div class="small muted" style="margin-top:6px" id="testText"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <span class="small muted" id="testText"></span>
+          <span style="flex:1"></span>
+          <button type="button" class="btn btn-danger-ghost btn-sm" id="testCancelBtn">■ 테스트 중지</button>
+        </div>
       </div>
       <div id="testResult" style="margin-top:8px"></div>
     </div>

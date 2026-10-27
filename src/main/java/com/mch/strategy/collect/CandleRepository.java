@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -50,6 +51,11 @@ public class CandleRepository {
 
     /** [from, to) 구간의 1분봉을 시간순 배열로 읽는다. */
     public CandleSeries load(long marketId, Instant from, Instant to) {
+        return load(marketId, from, to, null);
+    }
+
+    /** onProgress: 5만 봉마다 지금까지 읽은 봉 수를 알려준다 (진행률 · 중지 확인용, 예외를 던지면 읽기를 멈춘다) */
+    public CandleSeries load(long marketId, Instant from, Instant to, IntConsumer onProgress) {
         List<Object[]> rows = new ArrayList<>();
         jdbc.query("""
                 SELECT open_time, open, high, low, close, volume, quote_volume, trade_count, taker_buy_volume
@@ -63,6 +69,9 @@ public class CandleRepository {
                     rs.getDouble(6), rs.getDouble(7),
                     nullableDouble(rs.getObject(8)), nullableDouble(rs.getBigDecimal(9))
             });
+            if (onProgress != null && rows.size() % 50_000 == 0) {
+                onProgress.accept(rows.size());
+            }
         }, marketId, Timestamp.from(from), Timestamp.from(to));
 
         int n = rows.size();

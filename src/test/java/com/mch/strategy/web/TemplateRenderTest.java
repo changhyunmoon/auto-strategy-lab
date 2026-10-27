@@ -58,8 +58,26 @@ class TemplateRenderTest {
     }
 
     @Test
-    void collect_page() {
+    void raw_collect_page() {
         Map<String, Object> m = base("collect");
+        m.put("assets", List.of(asset(1, "BTC", "비트코인"), asset(2, "ETH", "이더리움")));
+        m.put("exchanges", List.of(Exchange.values()));
+        m.put("defaultFrom", LocalDate.of(2026, 10, 15));
+        m.put("defaultTo", LocalDate.of(2026, 10, 21));
+        m.put("maxDate", LocalDate.of(2026, 10, 21));
+        m.put("warmupDays", 5L);
+        m.put("runningJobId", 12L);
+
+        String html = render("collect/index", m);
+        assertThat(html).contains("<title>원본 데이터 받기 · 자동 전략 탐색</title>", "data-code=\"BTC\"",
+                "name=\"exchange\" value=\"UPBIT\"", "바이낸스 1분봉", "5일", "data-warmup-days=\"5\"",
+                "data-running-job=\"12\"", "coverageTable", "logTable", "/js/collect.js", "/datasets/new", "nav-item active");
+        assertThat(html).doesNotContain("name=\"feature\"", "name=\"interval\"");
+    }
+
+    @Test
+    void dataset_new_page() {
+        Map<String, Object> m = base("datasets");
         m.put("assets", List.of(asset(1, "BTC", "비트코인"), asset(2, "ETH", "이더리움")));
         m.put("sources", List.of(Exchange.values()));
         m.put("intervals", List.of("1m", "5m", "15m"));
@@ -71,11 +89,15 @@ class TemplateRenderTest {
         m.put("defaultTo", LocalDate.of(2026, 10, 21));
         m.put("maxDate", LocalDate.of(2026, 10, 21));
 
-        String html = render("collect/index", m);
-        assertThat(html).contains("데이터 가져오기", "data-code=\"BTC\"", "업비트 1분봉", "바이낸스 1분봉",
-                "data-requires=\"BOTH_EXCHANGES\"", "A. 수익률·모멘텀", "data-hover-term=\"feat_log_return\"", "data-hover-term=\"grp_A\"", "cancelBtn", "/js/collect.js", "class=\"sidebar\"",
+        m.put("featureList", List.of(feature("log_return", 4, List.of(), List.of())));
+        m.put("featureDocs", Map.of());
+
+        String html = render("datasets/new", m);
+        assertThat(html).contains("데이터세트 만들기", "data-code=\"BTC\"", "업비트 1분봉", "바이낸스 1분봉",
+                "data-requires=\"BOTH_EXCHANGES\"", "A. 수익률·모멘텀", "data-hover-term=\"feat_log_return\"", "data-hover-term=\"grp_A\"",
+                "cancelBtn", "rawStatus", "rawMissingLink", "DATASET_FEATURES", "/js/dataset-new.js", "class=\"sidebar\"",
                 "nav-item active");
-        assertThat(html).contains("<title>데이터 가져오기 · 자동 전략 탐색</title>");
+        assertThat(html).contains("<title>데이터세트 만들기 · 자동 전략 탐색</title>").doesNotContain("원본 수집");
     }
 
     @Test
@@ -86,7 +108,7 @@ class TemplateRenderTest {
         m.put("d", detail("READY"));
         String html = render("datasets/detail", m);
         assertThat(html).contains("BTC·ETH 7일", "tag-green", "25,536", "rsi_14", "빈 구간", "업비트 KRW-ETH",
-                "/viz?datasetId=3", "/collect?copy=3", "previewTable");
+                "/viz?datasetId=3", "/datasets/new?copy=3", "previewTable");
 
         m.put("d", detail("COMPUTING"));
         assertThat(render("datasets/detail", m)).contains("buildingBox", "tag-blue", "data-cancel-job=\"9\"").doesNotContain("previewTable");

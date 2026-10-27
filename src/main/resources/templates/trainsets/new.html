@@ -15,7 +15,7 @@
 
   <div class="empty" th:if="${datasets.isEmpty()}">
     <div class="empty-icon">🗂️</div>
-    완료된 데이터세트가 없습니다. <a class="link" th:href="@{/collect}">데이터 가져오기</a>에서 먼저 만들어 주세요.
+    완료된 데이터세트가 없습니다. <a class="link" th:href="@{/datasets/new}">데이터세트 만들기</a>에서 먼저 만들어 주세요.
   </div>
 
   <form id="setForm" onsubmit="return false;" th:unless="${datasets.isEmpty()}">
@@ -201,7 +201,11 @@
 
     <div id="progressBox" style="display:none;margin-top:20px">
       <div class="progress-thin"><span id="progressBar"></span></div>
-      <div class="small muted" style="margin-top:6px" id="progressText"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <span class="small muted" id="progressText"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn btn-danger-ghost btn-sm" id="cancelBtn" style="display:none">■ 중지</button>
+      </div>
       <div class="callout callout-red" style="margin-top:10px;display:none" id="failBox"><div class="callout-icon">⚠️</div><div class="callout-body" id="failText"></div></div>
     </div>
   </form>

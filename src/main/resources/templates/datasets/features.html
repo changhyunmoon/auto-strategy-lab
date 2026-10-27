@@ -21,7 +21,7 @@
 
   <div class="empty" th:if="${d == null}">
     <div class="empty-icon">🔎</div>
-    완료된 데이터세트가 없습니다. <a class="link" th:href="@{/collect}">데이터 가져오기</a>에서 먼저 만들어 주세요.
+    완료된 데이터세트가 없습니다. <a class="link" th:href="@{/datasets/new}">데이터세트 만들기</a>에서 먼저 만들어 주세요.
   </div>
 
   <div class="callout callout-yellow" th:if="${d != null and d.summary.status != 'READY'}">

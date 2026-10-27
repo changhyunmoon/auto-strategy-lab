@@ -54,6 +54,32 @@ class CollectTest {
         assertThat(service.alreadyCollected(1, Instant.parse("2026-09-30T00:00:00Z"), Instant.parse("2026-10-03T00:00:00Z"))).isFalse();
     }
 
+    @Test
+    void collected_and_missing_ranges() throws Exception {
+        CollectLogRepository repo = mock(CollectLogRepository.class);
+        when(repo.findByMarketIdAndStatusOrderByRangeFromAsc(anyLong(), any())).thenReturn(List.of(
+                log("2026-10-01T00:00:00Z", "2026-10-05T00:00:00Z"),
+                log("2026-10-03T00:00:00Z", "2026-10-06T00:00:00Z"),
+                log("2026-10-06T00:00:00Z", "2026-10-07T00:00:00Z"),   // 맞닿으면 하나로
+                log("2026-10-10T00:00:00Z", "2026-10-12T00:00:00Z")));
+        CollectService service = new CollectService(List.of(), mock(CandleRepository.class), repo);
+
+        assertThat(service.collectedRanges(1)).containsExactly(
+                new CollectService.Range(Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-07T00:00:00Z")),
+                new CollectService.Range(Instant.parse("2026-10-10T00:00:00Z"), Instant.parse("2026-10-12T00:00:00Z")));
+
+        // 앞 · 사이 · 뒤가 빠진 경우
+        assertThat(service.missingRanges(1, Instant.parse("2026-09-30T00:00:00Z"), Instant.parse("2026-10-14T00:00:00Z"))).containsExactly(
+                new CollectService.Range(Instant.parse("2026-09-30T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")),
+                new CollectService.Range(Instant.parse("2026-10-07T00:00:00Z"), Instant.parse("2026-10-10T00:00:00Z")),
+                new CollectService.Range(Instant.parse("2026-10-12T00:00:00Z"), Instant.parse("2026-10-14T00:00:00Z")));
+        // 받은 구간 안
+        assertThat(service.missingRanges(1, Instant.parse("2026-10-02T00:00:00Z"), Instant.parse("2026-10-06T12:00:00Z"))).isEmpty();
+        // 받은 구간 사이에 통째로 들어간 경우
+        assertThat(service.missingRanges(1, Instant.parse("2026-10-08T00:00:00Z"), Instant.parse("2026-10-09T00:00:00Z"))).containsExactly(
+                new CollectService.Range(Instant.parse("2026-10-08T00:00:00Z"), Instant.parse("2026-10-09T00:00:00Z")));
+    }
+
     private static CollectLog log(String from, String to) throws Exception {
         CollectLog log = CollectLog.start(1, Instant.parse(from), Instant.parse(to));
         log.succeed(1);

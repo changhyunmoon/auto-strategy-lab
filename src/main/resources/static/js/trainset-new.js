@@ -190,6 +190,8 @@ $(function () {
     $('#submitBtn').prop('disabled', true);
     App.api('POST', '/api/trainsets', body).done(function (res) {
       $('#progressBox').show();
+      $('#failBox').hide();
+      $('#cancelBtn').attr('data-cancel-job', res.jobId).prop('disabled', false).text('■ 중지').show();
       poll(res.jobId, res.trainingSetId);
     }).fail(function () { $('#submitBtn').prop('disabled', false); });
   });
@@ -197,13 +199,16 @@ $(function () {
   function poll(jobId, id) {
     App.api('GET', '/api/jobs/' + jobId).done(function (job) {
       $('#progressBar').css('width', job.progress + '%');
-      $('#progressText').text(job.progress + '% · ' + (job.step || ''));
+      $('#progressText').text(App.jobText(job));
       if (job.status === 'RUNNING') {
         setTimeout(function () { poll(jobId, id); }, 1500);
-      } else if (job.status === 'SUCCEEDED') {
+        return;
+      }
+      $('#cancelBtn').hide();
+      if (job.status === 'SUCCEEDED') {
         location.href = '/trainsets/' + id;
       } else {
-        $('#failText').text('실패: ' + (job.message || '알 수 없는 오류'));
+        $('#failText').text((job.message && job.message.indexOf('중지') === 0 ? '' : '실패: ') + (job.message || '알 수 없는 오류'));
         $('#failBox').show();
         $('#submitBtn').prop('disabled', false);
       }

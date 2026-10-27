@@ -76,7 +76,7 @@ class MlTemplateRenderTest {
         m.put("copy", null);
         m.put("datasetId", null);
         String form = render("trainsets/new", m);
-        assertThat(form).contains("datasetSel", "BTC·ETH 7일", "±0.3%", "/js/trainset-new.js", "var DATASETS =", "\"featureColumns\":20",
+        assertThat(form).contains("cancelBtn", "datasetSel", "BTC·ETH 7일", "±0.3%", "/js/trainset-new.js", "var DATASETS =", "\"featureColumns\":20",
                 "TRIPLE_BARRIER", "data-mode=\"VOLATILITY\"", "labelPreview", "data-term=\"horizon\"", "var LABEL_OPTS =", "/js/glossary.js");
 
         Map<String, Object> d = base("trainsets");
@@ -110,7 +110,7 @@ class MlTemplateRenderTest {
         Map<String, Object> m = base("runs");
         m.put("trainingSets", List.of(trainSetDetail("READY").summary()));
         m.put("selectedSetId", 5L);
-        assertThat(render("runs/list", m)).contains("setFilter", "compareChart", "/js/runs.js", "selected");
+        assertThat(render("runs/list", m)).contains("setFilter", "compareChart", "/js/runs.js", "selected", "cancelAll");
 
         Map<String, Object> d = base("runs");
         d.put("r", runDetail("READY"));
@@ -120,7 +120,7 @@ class MlTemplateRenderTest {
                 "💰 거래 성과", "/js/run-trade.js", "확장형 워크포워드 · 폴드 4", "data-horizon=\"5\"", "valExtra");
 
         d.put("r", runDetail("RUNNING"));
-        assertThat(render("runs/detail", d)).contains("trainProgress").doesNotContain("testBtn");
+        assertThat(render("runs/detail", d)).contains("trainProgress", "학습 중지").doesNotContain("testBtn");
     }
 
     private static TrainingSetViews.Detail trainSetDetail(String status) {

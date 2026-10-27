@@ -1,138 +1,133 @@
-/* 데이터 가져오기 화면 */
+/* 원본 데이터 받기 화면: 종목 × 거래소의 1분봉을 받아 DB 에 저장한다 */
 $(function () {
-  var STEPS = ['원본 수집', '재집계', '지표 계산', '품질 검사', '완료'];
-  var BAR_COLUMNS = 6;
-  var maxDate = $('#collectForm').data('max-date');
+  var DAY = 86400000;
+  var $form = $('#rawForm');
+  var maxDate = String($form.data('max-date'));
+  var warmupDays = Number($form.data('warmup-days')) || 0;
+  var coverage = [];
+  var running = false;
 
   function selected(name) {
     return $('input[name="' + name + '"]:checked').map(function () { return this.value; }).get();
   }
 
-  // ---------- 지표 조건: 필요한 데이터가 없으면 비활성화 ----------
-  function applyRequirements() {
-    var sources = selected('source'), assets = selected('asset');
-    var ok = {
-      BINANCE_CANDLES: sources.indexOf('BINANCE') >= 0,
-      BOTH_EXCHANGES: sources.indexOf('BINANCE') >= 0 && sources.indexOf('UPBIT') >= 0,
-      BOTH_ASSETS: assets.length === 2
-    };
-    $('.check-row').each(function () {
-      var reqs = String($(this).data('requires') || '').split(',').filter(Boolean);
-      var enabled = reqs.every(function (r) { return ok[r]; });
-      $(this).toggleClass('is-disabled', !enabled);
-      $(this).find('input').prop('disabled', !enabled);
-      $(this).find('.need').html(enabled ? '' : '<span class="tag tag-yellow"></span>');
-      if (!enabled) $(this).find('.need .tag').text($(this).data('need'));
+  function utcDate(ms) { return new Date(ms).toISOString().slice(0, 10); }
+  function rangeText(from, to) { return utcDate(from) + ' ~ ' + utcDate(to - 1); }
+
+  /** 받을 구간 [from, to) (epoch ms, 워밍업 포함) */
+  function requestedRange() {
+    var from = Date.parse($('#dateFrom').val() + 'T00:00:00Z');
+    if ($('#includeWarmup').prop('checked')) from -= warmupDays * DAY;
+    return { from: from, to: Date.parse($('#dateTo').val() + 'T00:00:00Z') + DAY };
+  }
+
+  /** 받아 둔 구간들로 [from, to) 중 빠진 시간 (분) */
+  function missingMinutes(ranges, from, to) {
+    var missing = 0, cursor = from;
+    (ranges || []).forEach(function (r) {
+      var a = Date.parse(r.from), b = Date.parse(r.to);
+      if (cursor >= to || b <= cursor || a >= to) return;
+      if (a > cursor) missing += a - cursor;
+      cursor = Math.max(cursor, b);
+    });
+    if (cursor < to) missing += to - cursor;
+    return Math.round(missing / 60000);
+  }
+
+  // ---------- 받아 둔 원본 · 이력 ----------
+  function loadCoverage() {
+    App.api('GET', '/api/raw/coverage').done(function (list) {
+      coverage = list;
+      var $tb = $('#coverageTable tbody').empty();
+      list.forEach(function (m) {
+        var ranges = (m.ranges || []).map(function (r) { return rangeText(Date.parse(r.from), Date.parse(r.to)); });
+        $('<tr>')
+          .append($('<td>').append($('<b>').text(m.assetCode)))
+          .append($('<td>').text(m.exchangeLabel + (m.enabled ? '' : ' (꺼짐)')))
+          .append($('<td class="mono">').text(m.symbol))
+          .append($('<td>').html(ranges.length ? ranges.map(function (t) { return $('<div>').text(t).html(); }).join('<br>')
+            : '<span class="faint">아직 없음</span>'))
+          .append($('<td class="num">').text(App.formatNumber(m.count)))
+          .appendTo($tb);
+      });
+      if (!list.length) $tb.html('<tr><td colspan="5" class="muted">마켓이 없습니다.</td></tr>');
+      updateSummary();
     });
   }
 
-  function updateGroups() {
-    var total = 0, cols = 0;
-    $('#featureGroups details').each(function () {
-      var $rows = $(this).find('.check-row:not(.is-disabled)');
-      var $on = $rows.filter(function () { return $(this).find('input').prop('checked'); });
-      $(this).find('.toggle-meta').text($on.length + '/' + $(this).find('.check-row').length + ' 선택');
-      var $g = $(this).find('.group-check');
-      $g.prop('checked', $on.length === $rows.length && $on.length > 0);
-      $g.prop('indeterminate', $on.length > 0 && $on.length < $rows.length);
-      total += $on.length;
-      $on.each(function () { cols += Number($(this).data('cols')); });
+  function loadLogs() {
+    App.api('GET', '/api/raw/logs').done(function (list) {
+      var $tb = $('#logTable tbody').empty();
+      var colors = { SUCCESS: 'green', FAILED: 'red', RUNNING: 'blue' };
+      var labels = { SUCCESS: '완료', FAILED: '실패', RUNNING: '받는 중' };
+      list.forEach(function (l) {
+        var $status = $('<td>').append(App.tag(labels[l.status] || l.status, colors[l.status]));
+        if (l.error) $status.append($('<div class="small muted">').text(l.error));
+        $('<tr>')
+          .append($('<td>').text(App.toKst(l.requestedAt)))
+          .append($('<td>').text(l.market))
+          .append($('<td>').text(rangeText(Date.parse(l.from), Date.parse(l.to))))
+          .append($('<td class="num">').text(App.formatNumber(l.rowCount)))
+          .append($status)
+          .appendTo($tb);
+      });
+      if (!list.length) $tb.html('<tr><td colspan="5" class="muted">아직 받은 적이 없습니다.</td></tr>');
     });
-    $('#featureCount').text(total + '개 선택');
-    return cols;
   }
 
-  function days() {
-    var a = new Date($('#dateFrom').val()), b = new Date($('#dateTo').val());
-    return Math.max(1, Math.round((b - a) / 86400000) + 1);
-  }
-
+  // ---------- 요약 ----------
   function updateSummary() {
-    applyRequirements();
-    var cols = updateGroups();
-    var nAssets = selected('asset').length, d = days();
-    var perMinute = selected('interval').reduce(function (s, v) { return s + 1 / parseInt(v, 10); }, 0);
-    var rows = Math.round(nAssets * d * 1440 * perMinute);
-    var calls = selected('source').indexOf('UPBIT') >= 0 ? Math.ceil(nAssets * d * 1440 / 200) : 0;
-    var minutes = Math.max(1, Math.round(calls / 8 / 60 + d / 20 + rows / 400000));
-    $('#sumRows').text(App.formatNumber(rows));
-    $('#sumCols').text(BAR_COLUMNS + cols);
-    $('#sumCalls').text(App.formatNumber(calls));
-    $('#sumTime').text('약 ' + minutes + '분');
+    var assets = selected('asset'), exchanges = selected('exchange'), r = requestedRange();
+    var markets = coverage.filter(function (m) {
+      return assets.indexOf(String(m.assetId)) >= 0 && exchanges.indexOf(m.exchange) >= 0;
+    });
+    var upbitMinutes = 0, binanceMinutes = 0;
+    markets.forEach(function (m) {
+      var miss = missingMinutes(m.ranges, r.from, r.to);
+      if (m.exchange === 'UPBIT') upbitMinutes += miss; else binanceMinutes += miss;
+    });
+    // 업비트: 200개씩 초당 약 8번 · 바이낸스: 하루 파일 하나에 약 3초
+    var minutes = Math.round(upbitMinutes / 200 / 8 / 60 + binanceMinutes / 1440 * 3 / 60);
+    $('#sumRange').text(isNaN(r.from) || isNaN(r.to) ? '-' : rangeText(r.from, r.to));
+    $('#sumMarkets').text(assets.length * exchanges.length);
+    $('#sumBars').text(App.formatNumber(upbitMinutes + binanceMinutes));
+    $('#sumTime').text(upbitMinutes + binanceMinutes === 0 ? '받을 것 없음' : minutes < 1 ? '1분 이내' : '약 ' + minutes + '분');
 
-    var problem = !nAssets ? '종목을 하나 이상 고르세요.'
-      : !selected('source').length ? '가져올 데이터를 하나 이상 고르세요.'
-      : !selected('interval').length ? '봉 간격을 하나 이상 고르세요.'
+    var problem = !assets.length ? '종목을 하나 이상 고르세요.'
+      : !exchanges.length ? '거래소를 하나 이상 고르세요.'
       : $('#dateFrom').val() > $('#dateTo').val() ? '시작일이 종료일보다 늦습니다.'
-      : !$.trim($('#datasetName').val()) ? '데이터세트 이름을 입력하세요.' : '';
-    $('#submitBtn').prop('disabled', !!problem || running);
+      : $('#dateTo').val() > maxDate ? '종료일은 ' + maxDate + ' (어제, UTC)까지 고를 수 있습니다.'
+      : running ? '받는 중입니다.' : '';
+    $('#submitBtn').prop('disabled', !!problem);
     $('#submitHint').text(problem);
   }
 
-  // ---------- DB 에 이미 있는 기간 ----------
-  App.api('GET', '/api/coverage').done(function (list) {
-    $('.coverage').each(function () {
-      var ex = $(this).data('exchange');
-      var mine = list.filter(function (m) { return m.exchange === ex && m.first; });
-      if (!mine.length) { $(this).text('DB 없음'); return; }
-      var first = mine.map(function (m) { return m.first; }).sort()[0];
-      var last = mine.map(function (m) { return m.last; }).sort().reverse()[0];
-      $(this).text('DB ' + first + ' ~ ' + last);
-    });
-  });
-
   // ---------- 입력 이벤트 ----------
-  function autoName() {
-    var codes = $('input[name="asset"]:checked').map(function () { return $(this).data('code'); }).get().join('·');
-    var label = { 7: '7일', 30: '1개월', 182: '6개월', 730: '24개월' }[$('input[name="quick"]:checked').val()] || (days() + '일');
-    $('#datasetName').val((codes || '종목') + ' ' + label + ' 지표');
-  }
-
   $('input[name="quick"]').on('change', function () {
     var to = new Date(maxDate);
-    var from = new Date(to.getTime() - (Number(this.value) - 1) * 86400000);
-    $('#dateTo').val(String(maxDate));
-    $('#dateFrom').val(from.toISOString().slice(0, 10));
-    autoName();
+    $('#dateTo').val(maxDate);
+    $('#dateFrom').val(utcDate(to.getTime() - (Number(this.value) - 1) * DAY));
     updateSummary();
   });
   $('#dateFrom, #dateTo').on('change', function () { $('input[name="quick"]').prop('checked', false); });
-  $('input[name="asset"]').on('change', autoName);
-
-  $('.group-check').on('click', function (e) {
-    e.stopPropagation();
-    $(this).closest('details').find('.check-row:not(.is-disabled) input').prop('checked', this.checked);
-    updateSummary();
-  });
-  $('#checkAll, #uncheckAll').on('click', function () {
-    $('.check-row:not(.is-disabled) input').prop('checked', this.id === 'checkAll');
-    updateSummary();
-  });
-  $(document).on('change input', '#collectForm input', updateSummary);
+  $(document).on('change input', '#rawForm input', updateSummary);
 
   // ---------- 받기 → 진행률 ----------
-  var running = false;
-
   $('#submitBtn').on('click', function () {
     var body = {
-      name: $.trim($('#datasetName').val()),
       assetIds: selected('asset').map(Number),
+      exchanges: selected('exchange'),
       from: $('#dateFrom').val(),
       to: $('#dateTo').val(),
-      sources: selected('source'),
-      intervals: selected('interval'),
-      features: $('.check-row:not(.is-disabled) input:checked').map(function () { return this.value; }).get()
+      includeWarmup: $('#includeWarmup').prop('checked')
     };
     running = true;
     $('#submitBtn').prop('disabled', true).text('받는 중…');
-    App.api('POST', '/api/datasets', body)
+    App.api('POST', '/api/raw/collect', body)
       .done(function (res) {
-        $('#progressBox').show();
-        $('#failBox, #doneBox').hide();
-        $('#doneLink').attr('href', '/datasets/' + res.datasetId);
-        $('#cancelBtn').attr('data-cancel-job', res.jobId).prop('disabled', false).text('■ 중지').show();
-        $('html, body').animate({ scrollTop: $('#progressBox').offset().top - 60 }, 300);
-        poll(res.jobId);
+        // 받은 기간 그대로 데이터세트 만들기 화면으로 넘긴다
+        $('#doneLink').attr('href', '/datasets/new?' + $.param({ assets: body.assetIds.join(','), sources: body.exchanges.join(','), from: body.from, to: body.to }));
+        startProgress(res.jobId);
       })
       .fail(function () {
         running = false;
@@ -140,6 +135,15 @@ $(function () {
         updateSummary();
       });
   });
+
+  function startProgress(jobId) {
+    running = true;
+    $('#submitBtn').prop('disabled', true).text('받는 중…');
+    $('#progressBox').show();
+    $('#failBox, #doneBox').hide();
+    $('#cancelBtn').attr('data-cancel-job', jobId).prop('disabled', false).text('■ 중지').show();
+    poll(jobId);
+  }
 
   function poll(jobId) {
     App.api('GET', '/api/jobs/' + jobId).done(function (job) {
@@ -150,22 +154,16 @@ $(function () {
         running = false;
         $('#cancelBtn').hide();
         $('#submitBtn').text('받기');
-        updateSummary();
+        loadCoverage();
+        loadLogs();
       }
     });
   }
 
   function renderProgress(job) {
-    var p = job.progress, done = job.status === 'SUCCEEDED', failed = job.status === 'FAILED';
-    var now = done ? STEPS.length - 1 : Math.max(0, STEPS.indexOf(job.step));
-    $('#progressBar').css('width', p + '%');
-    $('#progressText').text(p + '% · ' + (job.step || '') + (job.message && !failed ? ' · ' + job.message : ''));
-    $('#steps li').each(function (i) {
-      var isDone = done || i < now, isNow = !done && i === now;
-      $(this).toggleClass('done', isDone).toggleClass('now', isNow && !failed);
-      $(this).find('.mark').text(isDone ? '✓' : isNow ? (failed ? '✕' : '●') : '○');
-      $(this).find('.step-meta').text(isNow && !failed ? (job.message || '') : '');
-    });
+    var done = job.status === 'SUCCEEDED', failed = job.status === 'FAILED';
+    $('#progressBar').css('width', job.progress + '%');
+    $('#progressText').text(done ? '100% · 완료' : App.jobText(job));
     if (done) {
       $('#progressTag').attr('class', 'tag tag-green').html('<span class="dot"></span>완료');
       $('#doneBox').show();
@@ -178,21 +176,23 @@ $(function () {
     }
   }
 
-  // ---------- 같은 설정으로 새로 만들기 (?copy=데이터세트ID) ----------
-  var copyId = new URLSearchParams(location.search).get('copy');
-  if (copyId) {
-    App.api('GET', '/api/datasets/' + copyId).done(function (d) {
-      $('input[name="asset"]').each(function () { this.checked = d.assetIds.indexOf(Number(this.value)) >= 0; });
-      $('input[name="source"]').each(function () { this.checked = d.sources.indexOf(this.value) >= 0; });
-      $('input[name="interval"]').each(function () { this.checked = d.intervals.indexOf(this.value) >= 0; });
-      $('input[name="feature"]').each(function () { this.checked = d.featureCodes.indexOf(this.value) >= 0; });
-      $('input[name="quick"]').prop('checked', false);
-      $('#dateFrom').val(d.fromDate);
-      $('#dateTo').val(d.toDate > String(maxDate) ? String(maxDate) : d.toDate);
-      $('#datasetName').val(d.summary.name + ' (다시)');
-      updateSummary();
-    });
+  // ---------- 다른 화면에서 넘어온 값 (?assets=1,2&exchanges=UPBIT&from=&to=) ----------
+  var q = new URLSearchParams(location.search);
+  if (q.get('from') && q.get('to')) {
+    var assets = (q.get('assets') || '').split(','), exchanges = (q.get('exchanges') || '').split(',');
+    if (q.get('assets')) $('input[name="asset"]').each(function () { this.checked = assets.indexOf(this.value) >= 0; });
+    if (q.get('exchanges')) $('input[name="exchange"]').each(function () { this.checked = exchanges.indexOf(this.value) >= 0; });
+    $('#dateFrom').val(q.get('from'));
+    $('#dateTo').val(q.get('to') > maxDate ? maxDate : q.get('to'));
+    $('#includeWarmup').prop('checked', false); // 넘어온 시작일에 이미 워밍업이 들어 있다
+    $('input[name="quick"]').prop('checked', false);
   }
 
+  // 화면을 다시 열었을 때 받는 중인 작업이 있으면 진행률을 이어서 보여준다
+  var runningJob = $form.data('running-job');
+  if (runningJob) startProgress(runningJob);
+
+  loadCoverage();
+  loadLogs();
   updateSummary();
 });

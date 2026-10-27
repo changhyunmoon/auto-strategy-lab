@@ -23,6 +23,7 @@ import com.mch.strategy.dataset.DatasetRowRepository;
 import com.mch.strategy.feature.FeatureRegistry;
 import com.mch.strategy.instrument.Asset;
 import com.mch.strategy.instrument.AssetRepository;
+import com.mch.strategy.job.JobCancels;
 import com.mch.strategy.job.JobService;
 import com.mch.strategy.trainset.TrainingSet.Split;
 
@@ -61,6 +62,12 @@ public class TrainingSetBuilder {
             state.ready(trainingSetId, result.rows, result.columns, result.stats);
             jobService.succeed(jobId);
             log.info("학습 데이터 {} 완료: {}행 · {}열", trainingSetId, result.rows, result.columns.size());
+        } catch (JobCancels.CancelledException e) {
+            log.info("학습 데이터 {} 만들기를 사용자가 중지했습니다.", trainingSetId);
+            MlPaths.deleteTree(dir);
+            String message = "중지했습니다. 만들던 파일은 지웠습니다. 「같은 설정으로 새로 만들기」로 다시 만들 수 있습니다.";
+            state.fail(trainingSetId, message);
+            jobService.fail(jobId, message);
         } catch (Exception e) {
             log.error("학습 데이터 {} 실패", trainingSetId, e);
             MlPaths.deleteTree(dir);
@@ -128,7 +135,8 @@ public class TrainingSetBuilder {
                 int span = 100 / assetCount;
                 jobService.update(jobId, base, code + " 행 읽기", null);
 
-                DatasetRowRepository.Rows rows = rowRepository.load(ts.getDatasetId(), assetId, ts.getDecisionInterval(), null, null);
+                DatasetRowRepository.Rows rows = rowRepository.load(ts.getDatasetId(), assetId, ts.getDecisionInterval(), null, null,
+                        n -> jobService.update(jobId, base, code + " 행 읽기 " + String.format("%,d", n) + "행", null));
                 if (rows.size() == 0) {
                     throw new IllegalStateException(code + " " + ts.getDecisionInterval() + " 행이 기준 데이터세트에 없습니다.");
                 }
@@ -136,7 +144,8 @@ public class TrainingSetBuilder {
                 List<int[]> extraIndex = new ArrayList<>();
                 for (String iv : ts.getExtraIntervals()) {
                     jobService.update(jobId, base + span / 4, code + " " + Intervals.label(iv) + " 봉 붙이기", null);
-                    DatasetRowRepository.Rows er = rowRepository.load(ts.getDatasetId(), assetId, iv, null, null);
+                    DatasetRowRepository.Rows er = rowRepository.load(ts.getDatasetId(), assetId, iv, null, null,
+                            n -> jobService.update(jobId, base + span / 4, code + " " + Intervals.label(iv) + " 봉 읽기 " + String.format("%,d", n) + "행", null));
                     extraRows.add(er);
                     extraIndex.add(TrainingRows.alignCompleted(rows.time(), decisionMs, er.time(), Intervals.minutes(iv) * 60_000L));
                 }
@@ -148,6 +157,10 @@ public class TrainingSetBuilder {
                 TrainingRows.Plan[] plan = TrainingRows.plan(calc, ranges, spec);
 
                 for (int i = 0; i < plan.length; i++) {
+                    if (i > 0 && i % 100_000 == 0) { // 진행률 · 중지 확인
+                        jobService.update(jobId, base + span / 2 + (int) ((long) i * (span - span / 2) / plan.length),
+                                code + " 파일 쓰기 " + String.format("%,d", i) + " / " + String.format("%,d", plan.length) + "행", null);
+                    }
                     TrainingRows.Plan p = plan[i];
                     if (p.split() < 0) {
                         stats.excluded(p.excludedReason());

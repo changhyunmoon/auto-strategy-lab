@@ -17,10 +17,10 @@ BTC·ETH 1분봉을 업비트·바이낸스에서 받아 보조지표를 계산�
 src/main/java/com/mch/strategy
 ├─ common       시간 규칙(UTC 저장 · KST 표시), 오류 응답, JSON 배열, 비동기 설정
 ├─ instrument   종목(asset) · 거래소 마켓(market)
-├─ collect      1분봉 수집: 업비트 REST, 바이낸스 공개 파일(+REST 보완), candle_1m 저장
+├─ collect      원본 받기: 업비트 REST, 바이낸스 공개 파일(+REST 보완) → candle_1m · 받은 구간(collect_log)
 ├─ candle       5·15분 재집계, 시각 맞추기, 누락 구간 검사
 ├─ feature      지표 엔진 (Ta = 계산 함수, definitions/ = 그룹 A~G 지표 28개)
-├─ dataset      데이터세트 만들기(DatasetBuilder) · 조회 · 삭제
+├─ dataset      데이터세트 만들기(DatasetBuilder, 받아 둔 원본만 사용) · 조회 · 삭제
 ├─ job          작업 진행률
 ├─ viz          시각화 계산 (표본 추출 · 분포 · 상관 · 산점도 · 품질)
 ├─ trainset     학습 데이터: 기간 · 정답 · 학습/검증/테스트 구간 → 데이터 폴더에 행렬 파일
@@ -29,7 +29,7 @@ src/main/java/com/mch/strategy
 src/main/resources
 ├─ templates    Thymeleaf (layout/default.html 이 공통 틀)
 ├─ static/css   theme.css(디자인 값) · components.css(공통 요소)
-├─ static/js    common.js · collect.js · datasets.js · dataset-detail.js · viz.js
+├─ static/js    common.js · collect.js(원본 받기) · dataset-new.js(데이터세트 만들기) · datasets.js · dataset-detail.js · viz.js
 └─ db/migration V1 테이블 · V2 종목 초기값
 ```
 
@@ -57,8 +57,11 @@ src/main/resources
 
 ## 사용 순서
 
-1. **데이터 가져오기**: 종목 · 기간 · 출처 · 간격 · 지표를 고르고 「받기」. 처음에는 7일로 시험해 보세요.
-2. **데이터세트**: 진행 중이면 진행률이 보이고, 완료되면 열 목록 · 품질 · 미리보기를 볼 수 있습니다.
+1. **원본 데이터 받기** (`/collect`): 종목 · 거래소 · 기간만 골라 1분봉 원본을 받습니다. 처음에는 7일로 시험해 보세요.
+   이미 받은 구간은 건너뛰고 빠진 구간만 받습니다. 「워밍업도 함께 받기」를 켜 두면 고른 기간 그대로 데이터세트를 만들 수 있습니다.
+2. **데이터세트 만들기** (`/datasets/new`): 받아 둔 원본으로 종목 · 기간 · 사용할 원본 · 봉 간격 · 지표를 골라 만듭니다.
+   필요한 기간(워밍업 포함)의 원본이 없으면 「원본 준비 상태」에 부족으로 표시되고, 원본 받기 화면으로 바로 갈 수 있습니다.
+   목록 · 상세 화면에서 진행률 · 열 목록 · 품질 · 미리보기를 봅니다.
 3. **시각화**: 캔들 + 지표 패널, 분포, 상관, 산점도, 날짜별 누락을 봅니다.
 4. **학습 데이터**: 데이터세트를 골라 판단 간격(1·5·15·30·60분) · 정답 · 학습/검증/최종 테스트 날짜를 정해 만듭니다.
    정답은 「N봉 뒤 수익률」 또는 「N봉 안에 목표가 · 손절가 중 먼저 도달」, 기준은 고정 % · 변동성 배수 · 비용 차감 중에서 고릅니다.

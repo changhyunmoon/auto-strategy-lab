@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import com.mch.strategy.collect.RawCollectService;
 import com.mch.strategy.common.Intervals;
 import com.mch.strategy.dataset.DatasetColumn;
 import com.mch.strategy.dataset.DatasetQueryService;
@@ -38,6 +39,7 @@ public class PageController {
 
     private final AssetRepository assetRepository;
     private final MarketRepository marketRepository;
+    private final RawCollectService rawCollectService;
     private final FeatureRegistry featureRegistry;
     private final DatasetQueryService datasetQueryService;
 
@@ -46,10 +48,26 @@ public class PageController {
         return "redirect:/collect";
     }
 
+    /** 원본 데이터 받기: 종목 · 거래소 · 기간만 골라 1분봉을 받는다 */
     @GetMapping("/collect")
     public String collect(Model model) {
         LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
         model.addAttribute("menu", "collect");
+        model.addAttribute("assets", assetRepository.findByEnabledTrueOrderByIdAsc());
+        model.addAttribute("exchanges", List.of(Exchange.values()));
+        model.addAttribute("defaultFrom", yesterday.minusDays(6));
+        model.addAttribute("defaultTo", yesterday);
+        model.addAttribute("maxDate", yesterday);
+        model.addAttribute("warmupDays", rawCollectService.maxWarmupDays());
+        model.addAttribute("runningJobId", rawCollectService.runningJobId());
+        return "collect/index";
+    }
+
+    /** 데이터세트 만들기: 받아 둔 원본으로 간격 · 지표를 계산한다. copy = 같은 설정으로 다시 만들 데이터세트 id (화면 JS 가 읽는다) */
+    @GetMapping("/datasets/new")
+    public String newDataset(Model model) {
+        LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
+        model.addAttribute("menu", "datasets");
         model.addAttribute("assets", assetRepository.findByEnabledTrueOrderByIdAsc());
         model.addAttribute("sources", List.of(Exchange.values()));
         model.addAttribute("intervals", Intervals.SUPPORTED);
@@ -59,7 +77,7 @@ public class PageController {
         model.addAttribute("defaultFrom", yesterday.minusDays(6));
         model.addAttribute("defaultTo", yesterday);
         model.addAttribute("maxDate", yesterday);
-        return "collect/index";
+        return "datasets/new";
     }
 
     @GetMapping("/datasets")
@@ -171,6 +189,9 @@ public class PageController {
         m.put("requiresText", f.requirements().stream().map(r -> r.getMessage()).sorted().toList());
         m.put("columns", f.outputColumns().size());
         m.put("cols", f.outputColumns());
+        Map<String, Long> warmup = new LinkedHashMap<>(); // 간격별 워밍업(분) · 필요한 원본 기간 계산용
+        Intervals.SUPPORTED.forEach(iv -> warmup.put(iv, f.warmupMinutes(Intervals.minutes(iv))));
+        m.put("warmup", warmup);
         return m;
     }
 }

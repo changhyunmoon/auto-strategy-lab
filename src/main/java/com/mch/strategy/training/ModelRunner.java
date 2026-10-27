@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mch.strategy.common.AsyncConfigNames;
 import com.mch.strategy.common.config.MlPaths;
+import com.mch.strategy.job.JobCancels;
 import com.mch.strategy.job.JobService;
 import com.mch.strategy.trainset.TrainingSet;
 import com.mch.strategy.trainset.TrainingSetRepository;
@@ -127,6 +128,11 @@ public class ModelRunner {
             }
             jobService.succeed(jobId);
             log.info("실험 {} 완료 ({}초)", runId, Math.round((System.nanoTime() - started) / 1e9));
+        } catch (JobCancels.CancelledException e) {
+            log.info("실험 {} 을 사용자가 중지했습니다.", runId);
+            String message = "중지했습니다. 「같은 설정으로 다시 실행」으로 다시 학습할 수 있습니다.";
+            state.fail(runId, message);
+            jobService.fail(jobId, message);
         } catch (Throwable e) {
             log.error("실험 {} 실패", runId, e);
             String message = e instanceof OutOfMemoryError
@@ -464,6 +470,11 @@ public class ModelRunner {
                 state.tested(runId, Evaluator.scores(result), Backtester.summary(trade));
             }
             jobService.succeed(jobId);
+        } catch (JobCancels.CancelledException e) {
+            log.info("실험 {} 최종 테스트를 사용자가 중지했습니다.", runId);
+            String message = "최종 테스트를 중지했습니다. 결과는 저장하지 않았고 실행 횟수도 늘지 않았습니다.";
+            state.testFailed(runId, message);
+            jobService.fail(jobId, message);
         } catch (Throwable e) {
             log.error("실험 {} 최종 테스트 실패", runId, e);
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();

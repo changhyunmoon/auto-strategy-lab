@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.mch.strategy.collect.CandleRepository;
+import com.mch.strategy.collect.RawCollectRequest;
+import com.mch.strategy.collect.RawCollectService;
 import com.mch.strategy.common.ApiException;
 import com.mch.strategy.common.TimeUtils;
 import com.mch.strategy.dataset.CreateDatasetRequest;
@@ -49,10 +51,29 @@ public class ApiController {
     private final CandleRepository candleRepository;
     private final MarketRepository marketRepository;
     private final AssetRepository assetRepository;
+    private final RawCollectService rawCollectService;
 
-    // ---------- 데이터 가져오기 ----------
+    // ---------- 원본 데이터 받기 ----------
 
-    /** 마켓별로 DB 에 이미 있는 1분봉 기간 */
+    /** 고른 종목 × 거래소의 1분봉을 받는다 (아직 받지 않은 구간만). jobId 로 진행률을 본다 */
+    @PostMapping("/raw/collect")
+    public Map<String, Object> collectRaw(@Valid @RequestBody RawCollectRequest request) {
+        return rawCollectService.create(request);
+    }
+
+    /** 마켓별로 받아 둔 원본: 봉 수 · 처음/마지막 봉 · 빈틈없이 받은 구간 (UTC) */
+    @GetMapping("/raw/coverage")
+    public List<Map<String, Object>> rawCoverage() {
+        return rawCollectService.coverage();
+    }
+
+    /** 최근 받기 이력 */
+    @GetMapping("/raw/logs")
+    public List<Map<String, Object>> rawLogs() {
+        return rawCollectService.logs();
+    }
+
+    /** 마켓별로 DB 에 이미 있는 1분봉 기간 (KST 날짜 · 종목 관리 화면) */
     @GetMapping("/coverage")
     public List<Map<String, Object>> coverage() {
         Map<Long, CandleRepository.Coverage> byMarket = new LinkedHashMap<>();
@@ -82,7 +103,7 @@ public class ApiController {
         return jobService.view(id);
     }
 
-    /** 진행 중인 데이터세트 만들기(수집 · 지표 계산)를 멈춘다. 몇 초 안에 다음 확인 지점에서 멈춘다. */
+    /** 진행 중인 작업(원본 받기 · 데이터세트 만들기 등)을 멈춘다. 몇 초 안에 다음 확인 지점에서 멈춘다. */
     @PostMapping("/jobs/{id}/cancel")
     public Map<String, Object> cancelJob(@PathVariable long id) {
         Map<String, Object> job = jobService.view(id);

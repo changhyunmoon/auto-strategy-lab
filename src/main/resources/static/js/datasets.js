@@ -40,7 +40,8 @@ $(function () {
       $tr.append($('<td class="num"></td>').text(d.columnCount));
       $tr.append($('<td class="num"></td>').text(d.status === 'READY' ? App.formatNumber(d.rowCount) : '-').toggleClass('muted', d.status !== 'READY'));
       $tr.append($('<td class="muted"></td>').text(d.createdAt));
-      $tr.append($('<td></td>').append(d.building ? '' : '<button class="btn btn-danger-ghost btn-sm del">삭제</button>'));
+      $tr.append($('<td style="white-space:nowrap"></td>').append(d.building ? (d.jobId ? App.cancelButton(d.jobId) : '')
+        : '<button class="btn btn-danger-ghost btn-sm del">삭제</button>'));
       $tb.append($tr);
     });
     $('#emptyBox').toggle(all.length === 0);
@@ -66,6 +67,7 @@ $(function () {
     });
   }
 
+  $(document).on('job:cancel-requested', function () { load(); });
   $('input[name="status"]').on('change', render);
   $('#search').on('input', render);
   $('#datasetTable').on('click', 'tr.clickable', function (e) {

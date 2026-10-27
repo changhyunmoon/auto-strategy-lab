@@ -3,15 +3,35 @@
       xmlns:th="http://www.thymeleaf.org"
       xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
       layout:decorate="~{layout/default}">
-<head><title>데이터 가져오기</title></head>
+<head><title>원본 데이터 받기</title></head>
 <body>
 
-<div layout:fragment="topbar" class="topbar"><span class="crumb current">📥 데이터 가져오기</span></div>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">📥 원본 데이터 받기</span></div>
 
 <div layout:fragment="content" class="page">
-  <div th:replace="~{fragments/ui :: pageHead('📥', '데이터 가져오기', '거래소에서 1분봉을 받고, 선택한 보조지표를 계산해 데이터세트로 저장합니다.')}"></div>
+  <div th:replace="~{fragments/ui :: pageHead('📥', '원본 데이터 받기', '거래소에서 1분봉 원본만 받아 DB에 저장합니다. 봉 간격 묶기 · 지표 계산은 「데이터세트 만들기」에서 이 원본으로 합니다.')}"></div>
 
-  <form id="collectForm" onsubmit="return false;" th:data-max-date="${maxDate}">
+  <h2 class="section-title" style="margin-top:0"><span data-term="rawCoverage">받아 둔 원본</span>
+    <span class="small faint" style="font-weight:400">날짜는 UTC 기준</span>
+  </h2>
+  <div class="db-table-wrap">
+    <table class="db-table db-table--compact" id="coverageTable">
+      <thead>
+      <tr>
+        <th>종목</th><th>거래소</th><th>거래쌍</th>
+        <th><span data-term="collectedRange">빈틈없이 받은 구간</span></th>
+        <th class="num">1분봉 수</th>
+      </tr>
+      </thead>
+      <tbody><tr><td colspan="5" class="muted">불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="hint small muted" style="margin-top:6px">「빈틈없이 받은 구간」은 받기를 끝까지 마친 기간입니다. 데이터세트는 이 구간 안에서만 만들 수 있습니다.
+    거래소 점검처럼 원래 봉이 없는 분은 구간 안에 있어도 비어 있고, 데이터세트의 품질 탭에 표시됩니다.</div>
+
+  <h2 class="section-title">새로 받기</h2>
+  <form id="rawForm" onsubmit="return false;" th:data-max-date="${maxDate}" th:data-warmup-days="${warmupDays}"
+        th:data-running-job="${runningJobId}">
     <div class="props">
       <div class="prop">
         <div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
@@ -23,6 +43,16 @@
           </label>
           <span class="muted small" th:if="${assets.isEmpty()}">사용 중인 종목이 없습니다.</span>
           <a class="btn btn-ghost btn-sm" th:href="@{/instruments}">종목 관리 →</a>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🏦</span>거래소</div>
+        <div class="prop-value chip-group">
+          <label class="chip" th:each="ex : ${exchanges}" th:data-hover-term="${'src_' + ex.name()}">
+            <input type="checkbox" name="exchange" th:value="${ex.name()}" checked>
+            <th:block th:text="${ex.label + ' 1분봉'}">업비트 1분봉</th:block>
+          </label>
         </div>
       </div>
 
@@ -45,75 +75,30 @@
       </div>
 
       <div class="prop">
-        <div class="prop-label"><span class="prop-icon">🔌</span>가져올 데이터</div>
-        <div class="prop-value chip-group">
-          <label class="chip" th:each="s : ${sources}" th:data-hover-term="${'src_' + s.name()}">
-            <input type="checkbox" name="source" th:value="${s.name()}" checked>
-            <th:block th:text="${s.label + ' 1분봉'}">업비트 1분봉</th:block>
-            <span class="chip-sub coverage" th:data-exchange="${s.name()}">DB 확인 중</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="prop">
-        <div class="prop-label"><span class="prop-icon">⏱️</span><span data-term="barInterval">봉 간격</span></div>
-        <div class="prop-value chip-group">
-          <label class="chip" th:each="iv : ${intervals}">
-            <input type="checkbox" name="interval" th:value="${iv}" checked>
-            <th:block th:text="${iv.replace('m', '분')}">1분</th:block>
-          </label>
-        </div>
-      </div>
-
-      <div class="prop">
-        <div class="prop-label"><span class="prop-icon">🏷️</span>데이터세트 이름</div>
+        <div class="prop-label"><span class="prop-icon">⏪</span><span data-term="warmup">워밍업</span></div>
         <div class="prop-value">
-          <input type="text" class="form-control grow" id="datasetName" maxlength="100" value="BTC·ETH 7일 전체 지표">
+          <label class="check-row" style="margin:0">
+            <input type="checkbox" class="form-check-input" id="includeWarmup" checked>
+            <span>시작일 앞 <b th:text="${warmupDays} + '일'">7일</b>도 함께 받기</span>
+          </label>
+          <div class="hint">이동평균처럼 과거 봉이 필요한 지표는 시작일보다 앞선 원본으로 계산을 시작합니다.
+            켜 두면 이 기간 그대로 데이터세트를 만들 수 있습니다 (모든 지표 · 모든 간격 기준 가장 긴 길이).</div>
         </div>
       </div>
     </div>
 
-    <h2 class="section-title">만들 데이터 <span class="count" id="featureCount"></span>
-      <span class="small faint" style="font-weight:400">지표 이름에 마우스를 올리면 설명이 나옵니다</span>
-      <span class="section-actions">
-        <button type="button" class="btn btn-ghost btn-sm" id="checkAll">전체 선택</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="uncheckAll">전체 해제</button>
-      </span>
-    </h2>
-
-    <div id="featureGroups">
-      <details class="toggle" th:each="entry, st : ${featureGroups}" th:open="${st.first}">
-        <summary>
-          <span class="arrow">▶</span>
-          <input type="checkbox" class="form-check-input group-check">
-          <span class="hover-name" th:data-hover-term="${'grp_' + entry.key.code}" th:text="${entry.key.code + '. ' + entry.key.label}">A. 수익률·모멘텀</span>
-          <span class="toggle-meta"></span>
-        </summary>
-        <div class="toggle-body">
-          <label class="check-row" th:each="f : ${entry.value}" th:data-hover-term="${'feat_' + f.code}"
-                 th:data-cols="${f.columns}"
-                 th:data-requires="${#strings.listJoin(f.requires, ',')}"
-                 th:data-need="${#strings.listJoin(f.requiresText, ' · ')}">
-            <input type="checkbox" class="form-check-input" name="feature" th:value="${f.code}" checked>
-            <span class="name" th:text="${f.name}">지표</span>
-            <span class="param" th:text="${f.param}">파라미터</span>
-            <span class="need"></span>
-          </label>
-        </div>
-      </details>
-    </div>
-
-    <div class="callout callout-blue" style="margin-top:28px">
+    <div class="callout callout-blue" style="margin-top:20px">
       <div class="callout-icon">💡</div>
       <div class="callout-body">
         <div><b>받기 전에 확인하세요</b></div>
         <div class="stat-row">
-          <div class="stat"><div class="stat-label">예상 행 수</div><div class="stat-value" id="sumRows">-</div></div>
-          <div class="stat"><div class="stat-label">열 수 (봉 6 + 지표)</div><div class="stat-value" id="sumCols">-</div></div>
-          <div class="stat"><div class="stat-label">업비트 API 호출 (최대)</div><div class="stat-value" id="sumCalls">-</div></div>
+          <div class="stat"><div class="stat-label">받을 기간 (워밍업 포함)</div><div class="stat-value" id="sumRange">-</div></div>
+          <div class="stat"><div class="stat-label">마켓 수</div><div class="stat-value" id="sumMarkets">-</div></div>
+          <div class="stat"><div class="stat-label">아직 안 받은 1분봉 (최대)</div><div class="stat-value" id="sumBars">-</div></div>
           <div class="stat"><div class="stat-label">예상 소요 시간</div><div class="stat-value" id="sumTime">-</div></div>
         </div>
-        <div class="small muted" style="margin-top:6px">지표 계산이 안정되도록 시작일보다 앞선 기간(워밍업)을 함께 받습니다. 워밍업 행은 데이터세트에 표시만 하고 학습에서는 뺍니다. 이미 받은 기간은 다시 받지 않습니다.</div>
+        <div class="small muted" style="margin-top:6px">이미 받은 구간은 건너뛰고 빠진 구간만 받습니다. 업비트는 한 번에 200개씩 받아서 2년치가 시장 하나에 수십 분 걸립니다.
+          바이낸스는 하루 단위 파일로 받아 더 빠릅니다.</div>
       </div>
     </div>
 
@@ -129,27 +114,26 @@
     </h2>
     <div class="progress-thin"><span id="progressBar"></span></div>
     <div class="small muted" style="margin-top:6px" id="progressText">0%</div>
-    <ul class="steps" id="steps">
-      <li data-step="원본 수집"><span class="mark">○</span>원본 수집<span class="step-meta"></span></li>
-      <li data-step="재집계"><span class="mark">○</span>5분·15분 재집계<span class="step-meta"></span></li>
-      <li data-step="지표 계산"><span class="mark">○</span>지표 계산<span class="step-meta"></span></li>
-      <li data-step="품질 검사"><span class="mark">○</span>품질 검사<span class="step-meta"></span></li>
-      <li data-step="완료"><span class="mark">○</span>완료<span class="step-meta"></span></li>
-    </ul>
     <div id="failBox" class="callout callout-red" style="display:none; margin-top:16px">
       <div class="callout-icon">⚠️</div><div class="callout-body" id="failText"></div>
     </div>
     <div id="doneBox" style="display:none; margin-top:16px">
-      <a class="btn btn-outline" id="doneLink" href="#">데이터세트 보기 →</a>
+      <a class="btn btn-outline" id="doneLink" th:href="@{/datasets/new}">🧮 이 원본으로 데이터세트 만들기 →</a>
     </div>
+  </div>
+
+  <h2 class="section-title">최근 받기 이력 <span class="small faint" style="font-weight:400">최근 50건 · 받기 한 번에 마켓 · 빈 구간마다 한 줄</span></h2>
+  <div class="db-table-wrap">
+    <table class="db-table db-table--compact" id="logTable">
+      <thead>
+      <tr><th>요청 시각 (KST)</th><th>마켓</th><th>구간 (UTC)</th><th class="num">받은 봉</th><th>상태</th></tr>
+      </thead>
+      <tbody><tr><td colspan="5" class="muted">불러오는 중…</td></tr></tbody>
+    </table>
   </div>
 </div>
 
 <th:block layout:fragment="scripts">
-  <script th:inline="javascript">
-    /* 지표 이름에 마우스를 올리면 나오는 설명 (glossary.js) */
-    Glossary.addFeatureDocs(/*[[${featureList}]]*/ [], /*[[${featureDocs}]]*/ {});
-  </script>
   <script th:src="@{/js/collect.js}"></script>
 </th:block>
 </body>

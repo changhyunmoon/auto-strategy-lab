@@ -9,7 +9,7 @@
   <a class="crumb" th:href="@{/datasets}">🗂️ 데이터세트</a><span class="sep">/</span>
   <span class="crumb current" th:text="${d.summary.name}">이름</span>
   <span class="topbar-actions">
-    <a class="btn btn-ghost btn-sm" th:href="@{/collect(copy=${d.summary.id})}">같은 설정으로 새로 만들기</a>
+    <a class="btn btn-ghost btn-sm" th:href="@{/datasets/new(copy=${d.summary.id})}">같은 설정으로 새로 만들기</a>
     <button class="btn btn-danger-ghost btn-sm" id="deleteBtn" th:unless="${d.summary.building}">삭제</button>
   </span>
 </div>

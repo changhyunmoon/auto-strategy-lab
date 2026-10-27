@@ -4,7 +4,7 @@
 <!-- menu: 현재 메뉴 이름 (컨트롤러가 model 에 "menu" 로 넣는다) -->
 <aside class="sidebar" th:fragment="sidebar(menu)">
   <div class="sidebar-brand"><span class="brand-icon">S</span>자동 전략 탐색</div>
-  <a class="nav-item" th:classappend="${menu == 'collect'} ? 'active'" th:href="@{/collect}"><span class="nav-icon">📥</span>데이터 가져오기</a>
+  <a class="nav-item" th:classappend="${menu == 'collect'} ? 'active'" th:href="@{/collect}"><span class="nav-icon">📥</span>원본 데이터 받기</a>
   <a class="nav-item" th:classappend="${menu == 'datasets'} ? 'active'" th:href="@{/datasets}"><span class="nav-icon">🗂️</span>데이터세트</a>
   <a class="nav-item" th:classappend="${menu == 'viz'} ? 'active'" th:href="@{/viz}"><span class="nav-icon">📊</span>시각화</a>
   <a class="nav-item" th:classappend="${menu == 'features'} ? 'active'" th:href="@{/features}"><span class="nav-icon">🔎</span>변수 탐색</a>

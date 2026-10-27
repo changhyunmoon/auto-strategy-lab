@@ -12,4 +12,9 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     Optional<Job> findFirstByDatasetIdOrderByIdDesc(Long datasetId);
 
     Optional<Job> findFirstByJobTypeAndTargetIdOrderByIdDesc(String jobType, Long targetId);
+
+    Optional<Job> findFirstByJobTypeAndStatusOrderByIdDesc(String jobType, JobStatus status);
+
+    /** 대기 순서: 이 작업보다 먼저 만들어져 아직 끝나지 않은 작업 수 */
+    long countByStatusAndIdLessThan(JobStatus status, Long id);
 }

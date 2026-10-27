@@ -10,7 +10,7 @@ $(function () {
     (function poll() {
       App.api('GET', '/api/jobs/' + $page.data('job')).done(function (job) {
         $('#progressBar').css('width', job.progress + '%');
-        $('#progressText').text(job.progress + '% · ' + job.step + (job.message ? ' · ' + job.message : ''));
+        $('#progressText').text(App.jobText(job));
         if (job.status === 'RUNNING') setTimeout(poll, 2000);
         else location.reload();
       });

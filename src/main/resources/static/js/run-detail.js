@@ -9,11 +9,10 @@ $(function () {
   if (status === 'PENDING' || status === 'RUNNING') {
     $('#trainProgress').show();
     (function poll() {
-      App.api('GET', '/api/runs/' + id).done(function (r) {
-        var s = r.summary;
-        $('#trainBar').css('width', s.progress + '%');
-        $('#trainText').text(s.status === 'PENDING' ? '대기 중 — 앞의 작업이 끝나면 시작합니다.' : s.progress + '% · ' + s.step);
-        if (s.status === 'PENDING' || s.status === 'RUNNING') setTimeout(poll, 1500); else location.reload();
+      App.api('GET', '/api/jobs/' + $page.data('job')).done(function (job) {
+        $('#trainBar').css('width', job.progress + '%');
+        $('#trainText').text(App.jobText(job));
+        if (job.status === 'RUNNING') setTimeout(poll, 1500); else location.reload();
       });
     })();
     return;
@@ -157,14 +156,17 @@ $(function () {
 
   function pollTest(jobId) {
     $('#testProgress').show();
+    if ($('#testCancelBtn').attr('data-cancel-job') !== String(jobId)) {
+      $('#testCancelBtn').attr('data-cancel-job', jobId).prop('disabled', false).text('■ 테스트 중지');
+    }
     App.api('GET', '/api/jobs/' + jobId).done(function (job) {
       $('#testBar').css('width', job.progress + '%');
-      $('#testText').text(job.progress + '% · ' + (job.step || ''));
+      $('#testText').text(App.jobText(job));
       if (job.status === 'RUNNING') { setTimeout(function () { pollTest(jobId); }, 1500); return; }
       $('#testProgress').hide();
       $('#testBtn').prop('disabled', false);
       if (job.status === 'SUCCEEDED') { testCount++; testIntro(); loadTest(); $(document).trigger('test:done'); App.toast('최종 테스트를 마쳤습니다.'); }
-      else App.toast('최종 테스트 실패: ' + (job.message || ''), 'red');
+      else App.toast((job.message && job.message.indexOf('최종 테스트를 중지') === 0 ? '' : '최종 테스트 실패: ') + (job.message || ''), 'red');
     });
   }
 

@@ -8,7 +8,7 @@
 <div layout:fragment="topbar" class="topbar"><span class="crumb current">🪙 종목 관리</span></div>
 
 <div layout:fragment="content" class="page">
-  <div th:replace="~{fragments/ui :: pageHead('🪙', '종목 관리', '데이터 가져오기 화면의 종목 선택지와, 종목마다 데이터를 받을 거래소 마켓입니다.')}"></div>
+  <div th:replace="~{fragments/ui :: pageHead('🪙', '종목 관리', '원본 데이터 받기 · 데이터세트 만들기 화면의 종목 선택지와, 종목마다 데이터를 받을 거래소 마켓입니다.')}"></div>
 
   <h2 class="section-title">종목 <span class="count" th:text="${assets.size()}">2</span></h2>
   <div class="db-table-wrap">
@@ -43,7 +43,7 @@
 
   <div class="callout" style="margin-top:20px">
     <div class="callout-icon">ℹ️</div>
-    <div class="callout-body small">끈 종목·마켓은 데이터 가져오기에서 고를 수 없습니다. 새 종목·마켓 등록은 다음 단계에서 추가합니다.</div>
+    <div class="callout-body small">끈 종목·마켓은 원본 데이터 받기 · 데이터세트 만들기에서 고를 수 없습니다. 새 종목·마켓 등록은 다음 단계에서 추가합니다.</div>
   </div>
 </div>
 

@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 보조지표 하나. 이 인터페이스를 구현한 빈을 추가하면 데이터 가져오기 화면의 선택지에 자동으로 나타난다.
+ * 보조지표 하나. 이 인터페이스를 구현한 빈을 추가하면 데이터세트 만들기 화면의 선택지에 자동으로 나타난다.
  * 보통은 {@link Feature#of} 빌더로 만든다 (예: feature/definitions/RangeFeatures).
  */
 public interface FeatureDefinition {

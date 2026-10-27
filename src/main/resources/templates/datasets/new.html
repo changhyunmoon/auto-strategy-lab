@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>데이터세트 만들기</title></head>
+<body>
+
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/datasets}">🗂️ 데이터세트</a><span class="sep">/</span>
+  <span class="crumb current">새로 만들기</span>
+</div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('🧮', '데이터세트 만들기', '받아 둔 원본(1분봉)을 원하는 봉 간격으로 묶고, 고른 보조지표를 계산해 데이터세트로 저장합니다. 거래소에서 새로 받지 않습니다.')}"></div>
+
+  <form id="datasetForm" onsubmit="return false;" th:data-max-date="${maxDate}">
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
+        <div class="prop-value chip-group">
+          <label class="chip" th:each="asset : ${assets}">
+            <input type="checkbox" name="asset" th:value="${asset.id}" th:data-code="${asset.code}" checked>
+            <th:block th:text="${asset.code}">BTC</th:block>
+            <span class="chip-sub" th:text="${asset.name}">비트코인</span>
+          </label>
+          <span class="muted small" th:if="${assets.isEmpty()}">사용 중인 종목이 없습니다.</span>
+          <a class="btn btn-ghost btn-sm" th:href="@{/instruments}">종목 관리 →</a>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📅</span>기간</div>
+        <div class="prop-value">
+          <span class="date-range">
+            <input type="date" class="form-control" id="dateFrom" th:value="${defaultFrom}" min="2017-10-01" th:max="${maxDate}">
+            <span class="muted">→</span>
+            <input type="date" class="form-control" id="dateTo" th:value="${defaultTo}" min="2017-10-01" th:max="${maxDate}">
+          </span>
+          <span class="chip-group">
+            <label class="chip"><input type="radio" name="quick" value="7" checked>7일</label>
+            <label class="chip"><input type="radio" name="quick" value="30">1개월</label>
+            <label class="chip"><input type="radio" name="quick" value="182">6개월</label>
+            <label class="chip"><input type="radio" name="quick" value="730">24개월</label>
+          </span>
+          <div class="hint">날짜는 UTC 기준이고 종료일 하루 전체가 포함됩니다. 지표 계산용 앞쪽 기간(워밍업)까지 원본이 받아져 있어야 합니다.</div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🔌</span><span data-term="sourceRole">사용할 원본</span></div>
+        <div class="prop-value">
+          <span class="chip-group">
+            <label class="chip" th:each="s : ${sources}" th:data-hover-term="${'src_' + s.name()}">
+              <input type="checkbox" name="source" th:value="${s.name()}" checked>
+              <th:block th:text="${s.label + ' 1분봉'}">업비트 1분봉</th:block>
+            </label>
+          </span>
+          <div class="hint">업비트를 고르면 업비트가 실제로 거래할 시장(가격 · 정답 · 백테스트 기준)이 되고, 바이낸스는 같은 시각의 참고 값으로 붙습니다.</div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">✅</span><span data-term="rawCoverage">원본 준비 상태</span></div>
+        <div class="prop-value">
+          <div id="rawStatus" class="chip-group"><span class="muted small">받아 둔 원본 확인 중…</span></div>
+          <div class="hint" id="rawNeed"></div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">⏱️</span><span data-term="barInterval">봉 간격</span></div>
+        <div class="prop-value chip-group">
+          <label class="chip" th:each="iv : ${intervals}">
+            <input type="checkbox" name="interval" th:value="${iv}" checked>
+            <th:block th:text="${iv.replace('m', '분')}">1분</th:block>
+          </label>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🏷️</span>데이터세트 이름</div>
+        <div class="prop-value">
+          <input type="text" class="form-control grow" id="datasetName" maxlength="100" value="BTC·ETH 7일 전체 지표">
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">만들 데이터 <span class="count" id="featureCount"></span>
+      <span class="small faint" style="font-weight:400">지표 이름에 마우스를 올리면 설명이 나옵니다</span>
+      <span class="section-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="checkAll">전체 선택</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="uncheckAll">전체 해제</button>
+      </span>
+    </h2>
+
+    <div id="featureGroups">
+      <details class="toggle" th:each="entry, st : ${featureGroups}" th:open="${st.first}">
+        <summary>
+          <span class="arrow">▶</span>
+          <input type="checkbox" class="form-check-input group-check">
+          <span class="hover-name" th:data-hover-term="${'grp_' + entry.key.code}" th:text="${entry.key.code + '. ' + entry.key.label}">A. 수익률·모멘텀</span>
+          <span class="toggle-meta"></span>
+        </summary>
+        <div class="toggle-body">
+          <label class="check-row" th:each="f : ${entry.value}" th:data-hover-term="${'feat_' + f.code}"
+                 th:data-cols="${f.columns}"
+                 th:data-requires="${#strings.listJoin(f.requires, ',')}"
+                 th:data-need="${#strings.listJoin(f.requiresText, ' · ')}">
+            <input type="checkbox" class="form-check-input" name="feature" th:value="${f.code}" checked>
+            <span class="name" th:text="${f.name}">지표</span>
+            <span class="param" th:text="${f.param}">파라미터</span>
+            <span class="need"></span>
+          </label>
+        </div>
+      </details>
+    </div>
+
+    <div class="callout callout-blue" style="margin-top:28px">
+      <div class="callout-icon">💡</div>
+      <div class="callout-body">
+        <div><b>만들기 전에 확인하세요</b></div>
+        <div class="stat-row">
+          <div class="stat"><div class="stat-label">예상 행 수</div><div class="stat-value" id="sumRows">-</div></div>
+          <div class="stat"><div class="stat-label">열 수 (봉 6 + 지표)</div><div class="stat-value" id="sumCols">-</div></div>
+          <div class="stat"><div class="stat-label">지표 계산용 앞쪽 기간</div><div class="stat-value" id="sumWarmup">-</div></div>
+          <div class="stat"><div class="stat-label">예상 소요 시간</div><div class="stat-value" id="sumTime">-</div></div>
+        </div>
+        <div class="small muted" style="margin-top:6px">이동평균처럼 과거 N봉이 필요한 지표는 시작일보다 앞선 기간(워밍업)의 원본으로 계산을 시작합니다. 워밍업 행은 데이터세트에 표시만 하고 학습에서는 뺍니다.</div>
+      </div>
+    </div>
+
+    <div id="rawMissing" class="callout callout-yellow" style="display:none; margin-top:16px">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">
+        <div><b>받아 둔 원본이 모자랍니다</b></div>
+        <div class="small" id="rawMissingText"></div>
+        <div style="margin-top:8px"><a class="btn btn-outline btn-sm" id="rawMissingLink" th:href="@{/collect}">📥 원본 데이터 받기에서 이 기간 받기 →</a></div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:20px; align-items:center">
+      <button type="button" class="btn btn-primary" id="submitBtn">만들기</button>
+      <span class="small muted" id="submitHint"></span>
+    </div>
+  </form>
+
+  <div id="progressBox" style="display:none; margin-top:28px">
+    <h2 class="section-title" style="margin-top:0">진행 상황 <span class="tag tag-blue" id="progressTag"><span class="dot"></span>진행 중</span>
+      <span class="section-actions"><button type="button" class="btn btn-danger-ghost btn-sm" id="cancelBtn" style="display:none">■ 중지</button></span>
+    </h2>
+    <div class="progress-thin"><span id="progressBar"></span></div>
+    <div class="small muted" style="margin-top:6px" id="progressText">0%</div>
+    <ul class="steps" id="steps">
+      <li data-step="재집계"><span class="mark">○</span>1분봉 불러오기 · 간격별로 묶기<span class="step-meta"></span></li>
+      <li data-step="지표 계산"><span class="mark">○</span>지표 계산<span class="step-meta"></span></li>
+      <li data-step="품질 검사"><span class="mark">○</span>품질 검사<span class="step-meta"></span></li>
+      <li data-step="완료"><span class="mark">○</span>완료<span class="step-meta"></span></li>
+    </ul>
+    <div id="failBox" class="callout callout-red" style="display:none; margin-top:16px">
+      <div class="callout-icon">⚠️</div><div class="callout-body" id="failText"></div>
+    </div>
+    <div id="doneBox" style="display:none; margin-top:16px">
+      <a class="btn btn-outline" id="doneLink" href="#">데이터세트 보기 →</a>
+    </div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    /* 지표 이름에 마우스를 올리면 나오는 설명 (glossary.js) */
+    var DATASET_FEATURES = /*[[${featureList}]]*/ [];
+    Glossary.addFeatureDocs(DATASET_FEATURES, /*[[${featureDocs}]]*/ {});
+  </script>
+  <script th:src="@{/js/dataset-new.js}"></script>
+</th:block>
+</body>
+</html>

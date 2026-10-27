@@ -12,10 +12,11 @@
     <div>
       <div class="page-icon">🗂️</div>
       <h1 class="page-title">데이터세트</h1>
-      <div class="page-desc">받아서 만든 데이터세트 목록입니다. 행을 누르면 상세 화면으로 이동합니다.</div>
+      <div class="page-desc">받아 둔 원본으로 만든 데이터세트 목록입니다. 행을 누르면 상세 화면으로 이동합니다.</div>
     </div>
     <div class="page-head-actions">
-      <a class="btn btn-primary" th:href="@{/collect}">＋ 새로 만들기</a>
+      <a class="btn btn-ghost" th:href="@{/collect}">📥 원본 데이터 받기</a>
+      <a class="btn btn-primary" th:href="@{/datasets/new}">＋ 새로 만들기</a>
     </div>
   </div>
 
@@ -50,7 +51,7 @@
   </div>
   <div class="empty" id="emptyBox" style="display:none">
     <div class="empty-icon">🗂️</div>
-    아직 데이터세트가 없습니다. <a class="link" th:href="@{/collect}">데이터 가져오기</a>에서 만들어 보세요.
+    아직 데이터세트가 없습니다. <a class="link" th:href="@{/collect}">원본 데이터 받기</a>로 1분봉을 받은 뒤 <a class="link" th:href="@{/datasets/new}">새로 만들기</a>로 만들어 보세요.
   </div>
   <div class="table-footer"><span id="countText"></span></div>
   <div id="failNotes"></div>

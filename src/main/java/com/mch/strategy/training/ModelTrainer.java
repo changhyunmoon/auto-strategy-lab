@@ -7,6 +7,8 @@ import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
+import com.mch.strategy.job.JobCancels;
+
 import smile.base.cart.SplitRule;
 import smile.classification.GradientTreeBoost;
 import smile.classification.LogisticRegression;
@@ -84,12 +86,13 @@ final class ModelTrainer {
         int[] classWeight = balance == RunOptions.Balance.CLASS_WEIGHT ? classWeight(y) : null;
         IterativeAlgorithmController<RandomForest.TrainingStatus> ctl = new IterativeAlgorithmController<>();
         CountDownLatch done = new CountDownLatch(1);
-        ctl.subscribe(subscriber(s -> progress.accept(s.tree() * 100 / ntrees, "트리 " + s.tree() + " / " + ntrees), done));
+        ctl.subscribe(subscriber(ctl, s -> progress.accept(s.tree() * 100 / ntrees, "트리 " + s.tree() + " / " + ntrees), done));
         RandomForest.Options o = new RandomForest.Options(ntrees, Math.min(mtry, x[0].length), SplitRule.GINI,
                 i(params, "maxDepth"), i(params, "maxNodes"), i(params, "nodeSize"), d(params, "subsample"),
                 classWeight, seeds, ctl);
         RandomForest rf = RandomForest.fit(FORMULA, UnitModel.frame(x, y), o);
         finish(ctl, done);
+        throwIfStopped(ctl);
         return new UnitModel.SmileFrame(rf, x[0].length);
     }
 
@@ -100,11 +103,12 @@ final class ModelTrainer {
         int patience = i(params, "patience");
         IterativeAlgorithmController<GradientTreeBoost.TrainingStatus> ctl = new IterativeAlgorithmController<>();
         CountDownLatch done = new CountDownLatch(1);
-        ctl.subscribe(subscriber(s -> progress.accept(s.tree() * 100 / ntrees, "트리 " + s.tree() + " / " + ntrees), done));
+        ctl.subscribe(subscriber(ctl, s -> progress.accept(s.tree() * 100 / ntrees, "트리 " + s.tree() + " / " + ntrees), done));
         GradientTreeBoost.Options o = new GradientTreeBoost.Options(ntrees, i(params, "maxDepth"), i(params, "maxNodes"),
                 i(params, "nodeSize"), d(params, "shrinkage"), d(params, "subsample"), null, ctl);
         GradientTreeBoost gb = GradientTreeBoost.fit(FORMULA, UnitModel.frame(x, y), o);
         finish(ctl, done);
+        throwIfStopped(ctl);
         int trained = treeCount(gb);
 
         if (stopX == null || stopX.length == 0) {
@@ -171,7 +175,12 @@ final class ModelTrainer {
         return w;
     }
 
-    private static <T> Flow.Subscriber<T> subscriber(java.util.function.Consumer<T> onNext, CountDownLatch done) {
+    /**
+     * 진행 알림을 받는 쪽. 진행률을 알리다가 「중지」 요청을 만나면 Smile 에 멈추라고 알린다
+     * (Smile 은 트리 하나를 끝낼 때마다 멈춤 여부를 확인한다).
+     */
+    private static <T> Flow.Subscriber<T> subscriber(IterativeAlgorithmController<T> ctl,
+                                                     java.util.function.Consumer<T> onNext, CountDownLatch done) {
         return new Flow.Subscriber<>() {
             @Override
             public void onSubscribe(Flow.Subscription s) {
@@ -180,7 +189,14 @@ final class ModelTrainer {
 
             @Override
             public void onNext(T item) {
-                onNext.accept(item);
+                if (ctl.isInterrupted()) {
+                    return;
+                }
+                try {
+                    onNext.accept(item);
+                } catch (JobCancels.CancelledException e) {
+                    ctl.stop();
+                }
             }
 
             @Override
@@ -193,6 +209,13 @@ final class ModelTrainer {
                 done.countDown();
             }
         };
+    }
+
+    /** 학습 도중 「중지」 했으면 덜 만든 모델을 쓰지 않고 멈춘다 */
+    private static void throwIfStopped(IterativeAlgorithmController<?> ctl) {
+        if (ctl.isInterrupted()) {
+            throw new JobCancels.CancelledException();
+        }
     }
 
     /** 진행 알림을 다 받은 뒤 끝낸다 (조기 종료 판단이 마지막 트리까지 반영되도록) */

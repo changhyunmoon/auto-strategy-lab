@@ -16,7 +16,6 @@ import com.mch.strategy.candle.QualityChecker;
 import com.mch.strategy.candle.SeriesAlign;
 import com.mch.strategy.collect.CandleRepository;
 import com.mch.strategy.collect.CandleSeries;
-import com.mch.strategy.collect.CollectService;
 import com.mch.strategy.common.AsyncConfigNames;
 import com.mch.strategy.common.Intervals;
 import com.mch.strategy.common.JsonArrays;
@@ -36,7 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 데이터세트 만들기 (백그라운드).
- * 원본 수집(0~50%) → 자산·간격별 재집계와 지표 계산·저장(50~95%) → 품질 보고서(95~100%)
+ * 받아 둔 원본(1분봉) 불러오기(0~5%) → 자산·간격별 재집계와 지표 계산·저장(5~95%) → 품질 보고서(95~100%).
+ * 원본은 받지 않는다. 원본은 「원본 데이터 받기」에서 미리 받아 둔다 (만들기 요청 때 있는지 확인한다).
  */
 @Slf4j
 @Component
@@ -49,7 +49,6 @@ public class DatasetBuilder {
     private final DatasetColumnRepository columnRepository;
     private final MarketRepository marketRepository;
     private final AssetRepository assetRepository;
-    private final CollectService collectService;
     private final CandleRepository candleRepository;
     private final FeatureRegistry featureRegistry;
     private final DatasetRowRepository rowRepository;
@@ -66,7 +65,7 @@ public class DatasetBuilder {
             jobService.succeed(jobId);
         } catch (JobCancels.CancelledException e) {
             log.info("데이터세트 {} 만들기를 사용자가 중지했습니다.", datasetId);
-            String message = "중지했습니다. 지금까지 받은 1분봉은 저장되어 있고, 다시 만들 때 겹치는 봉은 중복 저장하지 않습니다.";
+            String message = "중지했습니다. 원본 1분봉은 그대로 남아 있으니 같은 설정으로 다시 만들면 됩니다.";
             state.fail(datasetId, message);
             jobService.fail(jobId, message);
         } catch (Exception e) {
@@ -97,29 +96,14 @@ public class DatasetBuilder {
                 reference.put(assetId, market(assetId, Exchange.BINANCE));
             }
         }
-        List<Market> allMarkets = new ArrayList<>(primary.values());
-        allMarkets.addAll(reference.values());
 
-        // 1. 원본 수집
-        state.changeStatus(datasetId, DatasetStatus.COLLECTING);
-        long expectedMinutes = Math.max(1, (to.toEpochMilli() - from.toEpochMilli()) / 60_000L);
-        for (int i = 0; i < allMarkets.size(); i++) {
-            Market m = allMarkets.get(i);
-            int index = i;
-            String label = m.getExchange().getLabel() + " " + m.getSymbol();
-            progress.set(pct(0, 50, index, allMarkets.size(), 0), "원본 수집", label + " 받는 중", true);
-            collectService.collect(m, from, to, rows -> progress.set(
-                    pct(0, 50, index, allMarkets.size(), Math.min(1.0, rows / (double) expectedMinutes)),
-                    "원본 수집", label + " " + String.format("%,d", rows) + "개", false));
-        }
-
-        // 2. 재집계 + 지표 계산
+        // 1. 받아 둔 1분봉 불러오기 + 재집계 + 지표 계산
         state.changeStatus(datasetId, DatasetStatus.AGGREGATING);
-        progress.set(50, "재집계", "1분봉 불러오는 중", true);
+        progress.set(0, "재집계", "받아 둔 1분봉 불러오는 중", true);
         Map<Long, CandleSeries> primary1m = new LinkedHashMap<>();
         Map<Long, CandleSeries> reference1m = new LinkedHashMap<>();
-        primary.forEach((assetId, m) -> primary1m.put(assetId, candleRepository.load(m.getId(), from, to)));
-        reference.forEach((assetId, m) -> reference1m.put(assetId, candleRepository.load(m.getId(), from, to)));
+        primary.forEach((assetId, m) -> primary1m.put(assetId, loadCandles(m, from, to, progress)));
+        reference.forEach((assetId, m) -> reference1m.put(assetId, loadCandles(m, from, to, progress)));
 
         state.changeStatus(datasetId, DatasetStatus.COMPUTING);
         List<Long> assetIds = ds.getAssetIds();
@@ -132,7 +116,7 @@ public class DatasetBuilder {
         for (Long assetId : assetIds) {
             Long otherId = assetIds.size() == 2 ? assetIds.get(assetIds.get(0).equals(assetId) ? 1 : 0) : null;
             for (String interval : ds.getIntervals()) {
-                progress.set(pct(50, 95, step, totalSteps, 0), "지표 계산",
+                progress.set(pct(5, 95, step, totalSteps, 0), "지표 계산",
                         assetCodes.getOrDefault(assetId, "자산 " + assetId) + " · " + Intervals.label(interval), true);
                 int minutes = Intervals.minutes(interval);
                 CandleSeries prim = CandleAggregator.aggregate(primary1m.get(assetId), minutes);
@@ -150,7 +134,7 @@ public class DatasetBuilder {
             }
         }
 
-        // 3. 품질 보고서 (워밍업 제외한 데이터세트 기간 기준)
+        // 2. 품질 보고서 (워밍업 제외한 데이터세트 기간 기준)
         state.changeStatus(datasetId, DatasetStatus.CHECKING);
         progress.set(95, "품질 검사", "누락 구간 확인 중", true);
         List<DatasetQuality> qualities = new ArrayList<>();
@@ -172,6 +156,12 @@ public class DatasetBuilder {
             }
             return f;
         }).toList();
+    }
+
+    private CandleSeries loadCandles(Market m, Instant from, Instant to, Progress progress) {
+        String label = m.getExchange().getLabel() + " " + m.getSymbol();
+        return candleRepository.load(m.getId(), from, to,
+                n -> progress.set(0, "재집계", label + " 1분봉 " + String.format("%,d", n) + "개 불러옴", false));
     }
 
     private Market market(long assetId, Exchange exchange) {

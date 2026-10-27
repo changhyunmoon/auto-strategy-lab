@@ -28,6 +28,7 @@ $(function () {
       $tr.append($('<td class="muted"></td>').text(t.createdAt));
       var $act = $('<td style="white-space:nowrap"></td>');
       if (t.status === 'READY') $act.append($('<a class="btn btn-ghost btn-sm">🧠 학습</a>').attr('href', '/training?trainingSetId=' + t.id));
+      if (t.building && t.jobId) $act.append(App.cancelButton(t.jobId));
       if (!t.building) $act.append('<button class="btn btn-danger-ghost btn-sm del">삭제</button>');
       $tr.append($act);
       $tb.append($tr);
@@ -63,6 +64,8 @@ $(function () {
     if (!window.confirm('「' + t.name + '」을(를) 지울까요?' + extra + ' (기준 데이터세트는 남습니다)')) return;
     App.api('DELETE', '/api/trainsets/' + id).done(function () { App.toast('삭제했습니다.'); load(); });
   });
+
+  $(document).on('job:cancel-requested', load);
 
   load();
 });

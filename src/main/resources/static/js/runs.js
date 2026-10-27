@@ -83,7 +83,11 @@ $(function () {
       $tr.append($('<td class="num"></td>').append(testCell(r)));
       var created = String(r.createdAt || '').split(' ');
       $tr.append($('<td class="num small"></td>').text(created[0] || '').append($('<div class="faint"></div>').text(created[1] || '')));
-      $tr.append($('<td></td>').append(r.busy ? '' : '<button class="btn btn-danger-ghost btn-sm del">삭제</button>'));
+      var $act = $('<td style="white-space:nowrap"></td>');
+      if ((r.status === 'RUNNING' || r.status === 'PENDING') && r.jobId) $act.append(App.cancelButton(r.jobId));
+      else if (r.testStatus === 'RUNNING' && r.testJobId) $act.append(App.cancelButton(r.testJobId, '■ 테스트 중지'));
+      if (!r.busy) $act.append('<button class="btn btn-danger-ghost btn-sm del">삭제</button>');
+      $tr.append($act);
       $tb.append($tr);
     });
     syncPicked();
@@ -164,6 +168,7 @@ $(function () {
       all = list;
       render();
       clearTimeout(timer);
+      $('#cancelAll').toggle(list.some(function (r) { return r.status === 'RUNNING' || r.status === 'PENDING'; }));
       if (list.some(function (r) { return r.busy; })) timer = setTimeout(load, 2000);
     });
   }
@@ -234,4 +239,14 @@ $(function () {
 
   if ($('#setFilter').val()) $('#newRunLink').attr('href', '/training?trainingSetId=' + $('#setFilter').val());
   load();
+  // ---------- 학습 중 · 대기 중인 실험 모두 중지 ----------
+  $('#cancelAll').on('click', function () {
+    var jobs = all.filter(function (r) { return (r.status === 'RUNNING' || r.status === 'PENDING') && r.jobId; })
+      .map(function (r) { return r.jobId; });
+    if (!jobs.length || !window.confirm('학습 중 · 대기 중인 실험 ' + jobs.length + '개를 모두 중지할까요?\n대기 중인 실험은 시작하지 않고 끝납니다.')) return;
+    var $b = $(this).prop('disabled', true);
+    $.when.apply($, jobs.map(function (j) { return App.api('POST', '/api/jobs/' + j + '/cancel'); }))
+      .always(function () { $b.prop('disabled', false); App.toast('중지를 요청했습니다. 몇 초 안에 멈춥니다.'); load(); });
+  });
+  $(document).on('job:cancel-requested', function () { load(); });
 });

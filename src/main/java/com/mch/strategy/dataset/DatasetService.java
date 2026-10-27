@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,8 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.mch.strategy.collect.CollectService;
+import com.mch.strategy.collect.RawCollectService;
 import com.mch.strategy.common.ApiException;
 import com.mch.strategy.common.Intervals;
 import com.mch.strategy.feature.FeatureDefinition;
@@ -20,6 +23,7 @@ import com.mch.strategy.feature.FeatureRequirement;
 import com.mch.strategy.instrument.Asset;
 import com.mch.strategy.instrument.AssetRepository;
 import com.mch.strategy.instrument.Exchange;
+import com.mch.strategy.instrument.Market;
 import com.mch.strategy.instrument.MarketRepository;
 import com.mch.strategy.job.Job;
 import com.mch.strategy.job.JobRepository;
@@ -31,9 +35,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DatasetService {
 
-    /** 이보다 이른 날짜는 받지 않는다 (업비트 원화 시장 초기) */
-    private static final LocalDate MIN_DATE = LocalDate.of(2017, 10, 1);
-
     private final DatasetRepository datasetRepository;
     private final DatasetColumnRepository columnRepository;
     private final DatasetQualityRepository qualityRepository;
@@ -42,6 +43,7 @@ public class DatasetService {
     private final MarketRepository marketRepository;
     private final FeatureRegistry featureRegistry;
     private final JobRepository jobRepository;
+    private final CollectService collectService;
     private final DatasetBuilder builder;
     private final TransactionTemplate tx;
 
@@ -52,13 +54,14 @@ public class DatasetService {
         if (intervals.isEmpty()) {
             throw ApiException.badRequest("봉 간격을 하나 이상 고르세요.");
         }
-        validateDates(req.from(), req.to());
+        RawCollectService.validateDates(req.from(), req.to());
         validateAssetsAndMarkets(assetIds, sources);
         List<FeatureDefinition> features = resolveFeatures(req.features(), assetIds.size(), sources);
 
         Instant from = req.from().atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant to = req.to().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant warmupFrom = from.minusSeconds(warmupMinutes(features, intervals) * 60);
+        checkRawData(assetIds, sources, warmupFrom, to);
 
         List<String> columnNames = new ArrayList<>(DatasetColumns.BAR_COLUMNS);
         features.forEach(f -> columnNames.addAll(f.outputColumns()));
@@ -110,17 +113,37 @@ public class DatasetService {
         return List.copyOf(out);
     }
 
-    private void validateDates(LocalDate from, LocalDate to) {
-        LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
-        if (from.isAfter(to)) {
-            throw ApiException.badRequest("시작일이 종료일보다 늦습니다.");
+    /**
+     * 데이터세트는 받아 둔 원본(1분봉)으로만 만든다. 워밍업을 포함한 기간 중 받지 않은 구간이 있으면 알려준다.
+     * 거래소 쪽 빈 구간(거래 없음 · 점검)은 받은 구간 안에 있으므로 문제 삼지 않고 품질 보고서에 나온다.
+     */
+    private void checkRawData(List<Long> assetIds, List<String> sources, Instant from, Instant to) {
+        Map<Long, String> codes = new HashMap<>();
+        assetRepository.findAllById(assetIds).forEach(a -> codes.put(a.getId(), a.getCode()));
+        List<String> problems = new ArrayList<>();
+        for (Long assetId : assetIds) {
+            for (String s : sources) {
+                Exchange ex = Exchange.valueOf(s);
+                Market m = marketRepository.findFirstByAssetIdAndExchangeAndEnabledTrue(assetId, ex).orElseThrow();
+                List<CollectService.Range> missing = collectService.missingRanges(m.getId(), from, to);
+                if (!missing.isEmpty()) {
+                    problems.add(codes.get(assetId) + " " + ex.getLabel() + " (" + rangeText(missing.get(0))
+                            + (missing.size() > 1 ? " 외 " + (missing.size() - 1) + "곳" : "") + ")");
+                }
+            }
         }
-        if (to.isAfter(yesterday)) {
-            throw ApiException.badRequest("종료일은 " + yesterday + " (어제, UTC)까지 고를 수 있습니다.");
+        if (!problems.isEmpty()) {
+            throw ApiException.badRequest("받아 둔 원본이 모자랍니다: " + String.join(", ", problems)
+                    + ". 「원본 데이터 받기」에서 " + rangeText(new CollectService.Range(from, to))
+                    + " (지표 계산용 앞쪽 기간 포함)을 먼저 받아 주세요.");
         }
-        if (from.isBefore(MIN_DATE)) {
-            throw ApiException.badRequest("시작일은 " + MIN_DATE + " 이후로 고르세요.");
-        }
+    }
+
+    /** UTC 날짜로 "2026-10-01 ~ 2026-10-07" (끝은 그날 하루를 포함하는 날짜) */
+    private static String rangeText(CollectService.Range r) {
+        LocalDate from = LocalDate.ofInstant(r.from(), ZoneOffset.UTC);
+        LocalDate to = LocalDate.ofInstant(r.to().minusMillis(1), ZoneOffset.UTC);
+        return from + " ~ " + to;
     }
 
     private void validateAssetsAndMarkets(List<Long> assetIds, List<String> sources) {
@@ -164,7 +187,7 @@ public class DatasetService {
     }
 
     /** 가장 긴 워밍업(최소 1시간)을 시간 단위로 올림 */
-    static long warmupMinutes(List<FeatureDefinition> features, List<String> intervals) {
+    public static long warmupMinutes(List<FeatureDefinition> features, List<String> intervals) {
         long max = 60;
         for (FeatureDefinition f : features) {
             for (String interval : intervals) {

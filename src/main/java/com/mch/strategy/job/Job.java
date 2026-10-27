@@ -25,6 +25,8 @@ public class Job {
     public static final String TYPE_TRAINSET_BUILD = "TRAINSET_BUILD";
     public static final String TYPE_MODEL_TRAIN = "MODEL_TRAIN";
     public static final String TYPE_MODEL_TEST = "MODEL_TEST";
+    /** 원본 데이터 받기 (대상 없음 · 이 작업이 받은 구간은 collect_log 에 남는다) */
+    public static final String TYPE_RAW_COLLECT = "RAW_COLLECT";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -65,6 +67,15 @@ public class Job {
         Job job = new Job();
         job.jobType = TYPE_DATASET_BUILD;
         job.datasetId = datasetId;
+        job.status = JobStatus.RUNNING;
+        job.step = "대기";
+        job.createdAt = Instant.now();
+        return job;
+    }
+
+    public static Job rawCollect() {
+        Job job = new Job();
+        job.jobType = TYPE_RAW_COLLECT;
         job.status = JobStatus.RUNNING;
         job.step = "대기";
         job.createdAt = Instant.now();

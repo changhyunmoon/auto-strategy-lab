@@ -1,6 +1,7 @@
 package com.mch.strategy.collect;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -70,19 +71,50 @@ public class CollectService {
     }
 
     /** 성공한 이력들의 구간을 이어 붙였을 때 [from, to) 를 빈틈없이 덮는지. */
-    boolean alreadyCollected(long marketId, Instant from, Instant to) {
-        Instant covered = from;
+    public boolean alreadyCollected(long marketId, Instant from, Instant to) {
+        return missingRanges(marketId, from, to).isEmpty();
+    }
+
+    /** 성공한 수집 이력을 이어 붙인 구간들 (시간순, 겹치거나 맞닿으면 하나로) */
+    public List<Range> collectedRanges(long marketId) {
+        List<Range> out = new ArrayList<>();
         for (CollectLog log : collectLogRepository.findByMarketIdAndStatusOrderByRangeFromAsc(marketId, CollectLog.SUCCESS)) {
-            if (log.getRangeFrom().isAfter(covered)) {
-                break;
-            }
-            if (log.getRangeTo().isAfter(covered)) {
-                covered = log.getRangeTo();
-            }
-            if (!covered.isBefore(to)) {
-                return true;
+            Range last = out.isEmpty() ? null : out.get(out.size() - 1);
+            if (last != null && !log.getRangeFrom().isAfter(last.to())) {
+                if (log.getRangeTo().isAfter(last.to())) {
+                    out.set(out.size() - 1, new Range(last.from(), log.getRangeTo()));
+                }
+            } else {
+                out.add(new Range(log.getRangeFrom(), log.getRangeTo()));
             }
         }
-        return false;
+        return out;
+    }
+
+    /** [from, to) 중 아직 받지 않은 구간들. 비어 있으면 모두 받은 것이다 */
+    public List<Range> missingRanges(long marketId, Instant from, Instant to) {
+        List<Range> missing = new ArrayList<>();
+        Instant cursor = from;
+        for (Range r : collectedRanges(marketId)) {
+            if (!r.to().isAfter(cursor)) {
+                continue;
+            }
+            if (!r.from().isBefore(to)) {
+                break;
+            }
+            if (r.from().isAfter(cursor)) {
+                missing.add(new Range(cursor, r.from()));
+            }
+            cursor = r.to();
+            if (!cursor.isBefore(to)) {
+                return missing;
+            }
+        }
+        missing.add(new Range(cursor, to));
+        return missing;
+    }
+
+    /** [from, to) 시간 구간 */
+    public record Range(Instant from, Instant to) {
     }
 }
