@@ -21,10 +21,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Job {
 
-    public static final String TYPE_DATASET_BUILD = "DATASET_BUILD";
-    public static final String TYPE_TRAINSET_BUILD = "TRAINSET_BUILD";
-    public static final String TYPE_MODEL_TRAIN = "MODEL_TRAIN";
-    public static final String TYPE_MODEL_TEST = "MODEL_TEST";
+    /** V2: 원본 1분봉 받기 + 입력 검사 */
+    public static final String TYPE_RAW_BUILD = "V2_RAW_BUILD";
+    /** V2: 기술 지표 계산 */
+    public static final String TYPE_FEATURE_BUILD = "V2_FEATURE_BUILD";
+    /** V2: H·P·L 정답 계산 */
+    public static final String TYPE_LABEL_BUILD = "V2_LABEL_BUILD";
+    /** V2: 학습·검증·최종 테스트 분할 */
+    public static final String TYPE_SPLIT_BUILD = "V2_SPLIT_BUILD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -61,17 +65,7 @@ public class Job {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
-    public static Job datasetBuild(long datasetId) {
-        Job job = new Job();
-        job.jobType = TYPE_DATASET_BUILD;
-        job.datasetId = datasetId;
-        job.status = JobStatus.RUNNING;
-        job.step = "대기";
-        job.createdAt = Instant.now();
-        return job;
-    }
-
-    /** 학습 데이터 만들기 · 모델 학습 · 최종 테스트처럼 데이터세트가 아닌 대상을 가진 작업 */
+    /** V2 작업: 대상(원본 · 지표 · 정답 · 분할)의 id 를 target_id 에 둔다. dataset_id 는 V1 에서만 쓰던 열이다. */
     public static Job forTarget(String type, long targetId) {
         Job job = new Job();
         job.jobType = type;

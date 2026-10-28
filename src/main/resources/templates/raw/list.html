@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>원본 1분봉</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">📥 원본 1분봉</span></div>
+
+<div layout:fragment="content" class="page page--wide">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">📥</div>
+      <h1 class="page-title">원본 1분봉</h1>
+      <div class="page-desc">거래소에서 받은 BTC·ETH 완료 1분봉 묶음입니다. 지표 · 정답 · 분할은 모두 이 원본을 기준으로 만듭니다.</div>
+    </div>
+    <div class="page-head-actions"><a class="btn btn-primary" th:href="@{/raw/new}">＋ 새 원본 받기</a></div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(1)}"></div>
+
+  <div class="db-table-wrap" th:if="${!raws.isEmpty()}">
+    <table class="db-table">
+      <thead><tr>
+        <th>#</th><th>이름</th><th>상태</th><th><span data-term="exchange">거래소</span></th><th><span data-term="pair">거래쌍</span></th>
+        <th><span data-term="utcDate">기간 (UTC)</span></th><th class="num">행 수</th><th class="num">지표 데이터셋</th><th>만든 시각 (KST)</th><th></th>
+      </tr></thead>
+      <tbody>
+      <tr th:each="r : ${raws}">
+        <td class="num faint" th:text="${'#' + r.id}">#1</td>
+        <td><a class="row-title" th:href="@{/raw/{id}(id=${r.id})}" th:text="${r.name}">이름</a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${r.status})}"></span></td>
+        <td th:text="${r.exchange.label}">업비트</td>
+        <td class="small"><th:block th:each="m, st : ${r.marketIdList()}"><span th:text="${marketLabels.get(m)}"></span><br th:unless="${st.last}"></th:block></td>
+        <td class="num" th:text="${T(com.mch.strategy.common.TimeUtils).utcDate(r.rangeFrom) + ' ~ ' + T(com.mch.strategy.common.TimeUtils).utcLastDate(r.rangeTo)}"></td>
+        <td class="num" th:text="${#numbers.formatInteger(r.rowCount, 1, 'COMMA')}">0</td>
+        <td class="num" th:text="${featureCounts.get(r.id)}">0</td>
+        <td class="num" th:text="${T(com.mch.strategy.common.TimeUtils).toKstText(r.createdAt)}"></td>
+        <td><a class="btn btn-ghost btn-sm" th:if="${r.status.name() == 'READY'}" th:href="@{/features/new(rawId=${r.id})}">지표 만들기 →</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty" th:if="${raws.isEmpty()}">
+    <div class="empty-icon">📥</div>
+    <div>아직 받은 원본이 없습니다.</div>
+    <div class="small" style="margin-top:4px">처음에는 7일 정도로 시험해 보세요. 이미 DB 에 있는 기간은 다시 받지 않습니다.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/raw/new}">＋ 새 원본 받기</a>
+  </div>
+</div>
+</body>
+</html>

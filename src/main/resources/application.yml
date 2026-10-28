@@ -36,9 +36,8 @@ server:
   port: 8080
 
 strategy:
-  ml:
-    # 학습 데이터 파일(입력 행렬)과 실험 결과(모델 · 예측 · 평가 JSON)를 두는 폴더. 깃에 올리지 않는다.
-    data-dir: ${STRATEGY_DATA_DIR:C:/strategy-data}
+  # V2 의 지표 · 정답 · 분할 결과 파일을 두는 폴더 (그 안의 v2/ 폴더를 쓴다). 깃에 올리지 않는다.
+  data-dir: ${STRATEGY_DATA_DIR:C:/strategy-data}
 
 logging:
   level:

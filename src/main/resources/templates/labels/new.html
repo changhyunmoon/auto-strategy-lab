@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>정답 만들기</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/labels}">🎯 정답 (H·P·L)</a><span class="sep">/</span><span class="crumb current">새로 만들기</span>
+</div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('🎯', 'H·P·L 수익 기회 정답 만들기', '판단 시점 뒤 최대 H분 동안 목표 수익 P 와 허용 손실 L 중 어느 쪽에 먼저 닿는지로 정답을 정합니다. H · P · L 과 판정 규칙은 직접 정하고, 정답 정의마다 새 버전으로 저장합니다.')}"></div>
+  <div th:replace="~{fragments/ui :: flow(3)}"></div>
+
+  <div class="empty" th:if="${features.isEmpty()}">
+    <div class="empty-icon">🧮</div>
+    <div>완료된 지표 데이터셋이 없습니다. 먼저 기술 지표를 만드세요.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/features/new}">지표 만들기 →</a>
+  </div>
+
+  <div id="labelForm" th:unless="${features.isEmpty()}">
+    <!-- 1. 기준 데이터 -->
+    <h2 class="section-title" style="margin-top:0">1. 기준 데이터</h2>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🧮</span><span data-term="featureSet">지표 데이터셋</span></div>
+        <div class="prop-value">
+          <select class="form-select" id="featureSelect" style="min-width:320px">
+            <option th:each="f : ${features}" th:value="${f.id}" th:selected="${f.id == selectedFeature}" th:text="${'#' + f.id + ' ' + f.name}"></option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="featureInfo" class="small" style="margin:4px 0 0 6px"></div>
+
+    <!-- 2. 정답 설정 -->
+    <h2 class="section-title">2. 정답 설정 <span data-term="labelSet"></span></h2>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">⏱️</span><span data-term="horizonH">H 최대 관찰 시간</span></div>
+        <div class="prop-value"><input type="number" class="form-control" id="horizon" min="1" max="10080" step="1" style="width:110px"><span class="muted">분 (1분봉 개수)</span>
+          <div class="hint">양의 정수. 진입 뒤 이만큼의 1분봉을 순서대로 확인합니다. 30분봉 등으로 묶지 않습니다.</div></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🎯</span><span data-term="targetP">P 목표 수익률</span></div>
+        <div class="prop-value"><input type="number" class="form-control" id="target" min="0" step="0.01" style="width:110px"><span class="muted">%</span>
+          <div class="hint">진입 가격 기준 양수 %. 소수 둘째 자리 정도까지 넣을 수 있습니다 (예: 0.5 = 0.5%).</div></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🛑</span><span data-term="stopL">L 허용 손실률</span></div>
+        <div class="prop-value"><input type="number" class="form-control" id="stop" min="0" step="0.01" style="width:110px"><span class="muted">%</span>
+          <div class="hint">진입 가격 기준 양수 %. 아래로 이만큼 움직이면(매수 기준) 손실 도달입니다.</div></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">↕️</span><span data-term="direction">거래 방향</span></div>
+        <div class="prop-value chip-group">
+          <label class="chip"><input type="radio" name="direction" value="LONG">매수 후 매도 (long)<span class="chip-sub">오르면 이익</span></label>
+          <label class="chip"><input type="radio" name="direction" value="SHORT">하락 수익 방향 (short)<span class="chip-sub">참고용</span></label>
+          <div class="hint">지원할 방향은 아직 정하지 않았습니다. 업비트 원화 현물은 공매도가 안 되므로 현물 매수 기회만 본다면 long 으로 두세요.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🚪</span><span data-term="entryRule">진입 기준</span></div>
+        <div class="prop-value chip-group">
+          <label class="chip"><input type="radio" name="entry" value="NEXT_OPEN">다음 1분봉 시가<span class="chip-sub">첫 제안</span></label>
+          <label class="chip"><input type="radio" name="entry" value="CLOSE">판단 봉 종가</label>
+          <div class="hint">현재 봉이 끝난 뒤에만 진입할 수 있다고 봅니다. 가정 진입 가격이며 실제 체결 가격과 구분합니다.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">⚖️</span><span data-term="sameBar">동시 도달 처리</span></div>
+        <div class="prop-value chip-group">
+          <label class="chip"><input type="radio" name="sameBar" value="AMBIGUOUS">판정 불가로 따로 두기</label>
+          <label class="chip"><input type="radio" name="sameBar" value="STOP_FIRST">손실 먼저로 보기<span class="chip-sub">보수적</span></label>
+          <div class="hint">같은 1분봉에서 목표 · 손실 모두 닿으면 1분봉 OHLCV 만으로는 순서를 알 수 없습니다. 성공으로 자동 판정하지 않습니다.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">💸</span><span data-term="cost">비용 가정</span></div>
+        <div class="prop-value">
+          <label class="chip"><input type="checkbox" id="costEnabled">P · L 을 비용 차감 후 기준으로</label>
+          <span class="cost-fields">
+            <span data-term="fee">수수료</span> <input type="number" class="form-control form-control-sm" id="fee" min="0" step="0.01" style="width:80px">%
+            <span data-term="slippage">슬리피지</span> <input type="number" class="form-control form-control-sm" id="slippage" min="0" step="0.01" style="width:80px">% <span class="small muted">(한쪽)</span>
+          </span>
+          <div class="hint" id="costHint">끄면 가격 경로만으로 판정합니다. 켜면 목표 폭 = P + 왕복 비용, 손실 폭 = L − 왕복 비용으로 확인합니다 (호가 · 체결을 재현하지 않는 추정값).</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="section-title" style="font-size:15px">판정 규칙 요약 <span data-term="observation"></span> <span data-term="hitRule"></span></h3>
+    <div class="rule-box" id="ruleBox"></div>
+
+    <!-- 3. 탐색 기간 -->
+    <h2 class="section-title">3. 탐색 기간과 숨김 기간 <span data-term="exploreTo"></span></h2>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🔒</span>탐색 기간 끝 (UTC)</div>
+        <div class="prop-value"><input type="date" class="form-control" id="exploreTo" style="width:170px">
+          <span class="small muted" id="exploreInfo"></span>
+          <div class="hint">이 날짜 00:00 UTC 이후 판단 행은 정답 분포를 보여주지 않습니다 — 나중에 최종 테스트로 쓸 기간을 미리 비워 두기 위해서입니다. 처음 값은 데이터 끝 약 20% 를 비워 둔 시작값일 뿐입니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 4. 미리보기 -->
+    <h2 class="section-title">4. 생성 전 미리보기
+      <span class="section-actions"><button type="button" class="btn btn-outline btn-sm" id="previewBtn">미리보기 계산</button></span>
+    </h2>
+    <div class="small muted" style="margin-bottom:6px">탐색 기간의 상태별 건수 · 비율과, 숨김 기간의 행 수 · 데이터 품질만 보여줍니다. 특정 비율을 맞추려고 기준을 자동으로 바꾸지 않습니다.</div>
+    <div id="previewBox"><div class="lock-box">「미리보기 계산」을 누르면 거래쌍별 분포가 나옵니다 (1년치 기준 수 초).</div></div>
+
+    <!-- 5. 저장 -->
+    <h2 class="section-title">5. 저장 · 생성</h2>
+    <div class="props">
+      <div class="prop"><div class="prop-label"><span class="prop-icon">🏷️</span>정답 이름</div>
+        <div class="prop-value"><input type="text" class="form-control grow" id="name" maxlength="100" th:value="${initialName}"></div></div>
+      <div class="prop"><div class="prop-label"><span class="prop-icon">📝</span>설명 (선택)</div>
+        <div class="prop-value"><input type="text" class="form-control grow" id="description" maxlength="500" placeholder="예: 30분 안에 0.5% 기회, 손절 0.3%"></div></div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:16px; align-items:center">
+      <button type="button" class="btn btn-primary" id="createBtn">정답 만들기</button>
+      <span class="small muted" id="createHint"></span>
+    </div>
+
+    <div th:replace="~{fragments/ui :: jobBox}"></div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var LABEL_INIT = {
+      config: JSON.parse(/*[[${configJson}]]*/ 'null'),
+      exploreTo: /*[[${initialExploreTo}]]*/ null,
+      features: JSON.parse(/*[[${featureInfoJson}]]*/ '{}')
+    };
+  </script>
+  <script th:src="@{/js/label-common.js}"></script>
+  <script th:src="@{/js/label-new.js}"></script>
+</th:block>
+</body>
+</html>

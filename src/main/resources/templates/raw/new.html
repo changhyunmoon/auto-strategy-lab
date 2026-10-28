@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>새 원본 받기</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/raw}">📥 원본 1분봉</a><span class="sep">/</span><span class="crumb current">새 원본 받기</span>
+</div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('📥', '새 원본 받기', '한 거래소의 BTC·ETH 완료 1분봉을 기간으로 받아 원본 데이터셋으로 저장합니다. 받은 뒤 입력 검사(빈 1분 · 범위 오류 등)를 자동으로 합니다.')}"></div>
+  <div th:replace="~{fragments/ui :: flow(1)}"></div>
+
+  <form id="rawForm" onsubmit="return false;" th:data-max-date="${maxDate}">
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🔌</span><span data-term="exchange">거래소</span></div>
+        <div class="prop-value chip-group">
+          <label class="chip" th:each="ex, st : ${exchanges}">
+            <input type="radio" name="exchange" th:value="${ex.name()}" th:checked="${st.first}">
+            <th:block th:text="${ex.label}">업비트</th:block>
+            <span class="chip-sub coverage" th:data-exchange="${ex.name()}">DB 확인 중</span>
+          </label>
+          <div class="hint">한 원본에는 한 거래소만 넣습니다. 업비트 = 원화(KRW-BTC), 바이낸스 = USDT(BTCUSDT). 실제로 어느 거래소에서 매매할지는 아직 정하지 않았습니다.</div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🪙</span>종목</div>
+        <div class="prop-value chip-group">
+          <label class="chip" th:each="a : ${assets}">
+            <input type="checkbox" name="asset" th:value="${a.id}" th:data-code="${a.code}" checked>
+            <th:block th:text="${a.code}">BTC</th:block><span class="chip-sub" th:text="${a.name}">비트코인</span>
+          </label>
+          <a class="btn btn-ghost btn-sm" th:href="@{/instruments}">종목 관리 →</a>
+          <div class="hint">종목마다 따로 계산합니다. BTC 와 ETH 의 값을 이어 붙이거나 합치지 않습니다.</div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📅</span><span data-term="utcDate">기간 (UTC)</span></div>
+        <div class="prop-value">
+          <span class="date-range">
+            <input type="date" class="form-control" id="dateFrom" th:value="${defaultFrom}" min="2017-09-01" th:max="${maxDate}">
+            <span class="muted">→</span>
+            <input type="date" class="form-control" id="dateTo" th:value="${defaultTo}" min="2017-09-01" th:max="${maxDate}">
+          </span>
+          <span class="chip-group">
+            <label class="chip"><input type="radio" name="quick" value="7" checked>7일</label>
+            <label class="chip"><input type="radio" name="quick" value="30">1개월</label>
+            <label class="chip"><input type="radio" name="quick" value="182">6개월</label>
+            <label class="chip"><input type="radio" name="quick" value="365">1년</label>
+            <label class="chip"><input type="radio" name="quick" value="730">2년</label>
+          </span>
+          <div class="hint">UTC 날짜이고 종료일 하루 전체가 들어갑니다. <span data-term="completedBar">완료된 봉</span>만 받도록 종료일은 어제까지 고를 수 있습니다.</div>
+        </div>
+      </div>
+
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🏷️</span>이름</div>
+        <div class="prop-value"><input type="text" class="form-control grow" id="name" maxlength="100" value="업비트 BTC·ETH 7일"></div>
+      </div>
+    </div>
+
+    <div class="callout callout-blue" style="margin-top:24px">
+      <div class="callout-icon">💡</div>
+      <div class="callout-body">
+        <div><b>받기 전에 확인하세요</b></div>
+        <div class="stat-row">
+          <div class="stat"><div class="stat-label">예상 행 수 (1분봉)</div><div class="stat-value" id="sumRows">-</div></div>
+          <div class="stat"><div class="stat-label">업비트 API 호출 (최대)</div><div class="stat-value" id="sumCalls">-</div></div>
+          <div class="stat"><div class="stat-label">예상 소요 시간 (처음 받을 때)</div><div class="stat-value" id="sumTime">-</div></div>
+        </div>
+        <div class="small muted" style="margin-top:6px">이미 DB 에 받아 둔 기간은 다시 받지 않으므로 훨씬 빨리 끝납니다. 업비트는 한 번에 200개씩 받아 1년 ≈ 시장 하나에 2,600번 호출합니다. 바이낸스는 일별 공개 파일로 받아 빠릅니다.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:20px; align-items:center">
+      <button type="button" class="btn btn-primary" id="submitBtn">받기</button>
+      <span class="small muted" id="submitHint"></span>
+    </div>
+  </form>
+
+  <div th:replace="~{fragments/ui :: jobBox}"></div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:src="@{/js/raw-new.js}"></script>
+</th:block>
+</body>
+</html>

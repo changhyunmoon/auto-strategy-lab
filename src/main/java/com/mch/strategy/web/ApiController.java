@@ -1,11 +1,17 @@
 package com.mch.strategy.web;
 
-import java.time.Instant;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,43 +22,47 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.mch.strategy.collect.CandleRepository;
 import com.mch.strategy.common.ApiException;
 import com.mch.strategy.common.TimeUtils;
-import com.mch.strategy.dataset.CreateDatasetRequest;
-import com.mch.strategy.dataset.DatasetQueryService;
-import com.mch.strategy.dataset.DatasetService;
-import com.mch.strategy.dataset.DatasetViews;
+import com.mch.strategy.feature.FeaturePreset;
+import com.mch.strategy.feature.FeatureService;
+import com.mch.strategy.indicator.IndicatorConfig;
 import com.mch.strategy.instrument.AssetRepository;
 import com.mch.strategy.instrument.Market;
 import com.mch.strategy.instrument.MarketRepository;
+import com.mch.strategy.job.JobCancels;
 import com.mch.strategy.job.JobService;
-import com.mch.strategy.viz.FeatureProfileService;
-import com.mch.strategy.viz.VizService;
+import com.mch.strategy.label.LabelService;
+import com.mch.strategy.label.LabelSummary;
+import com.mch.strategy.raw.RawService;
+import com.mch.strategy.split.SplitPlan;
+import com.mch.strategy.split.SplitService;
+import com.mch.strategy.split.SplitSummary;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-/** 화면의 jQuery 가 호출하는 JSON API. 오류는 {"message": ...} 로 돌아간다. */
+/** V2 JSON API. 화면의 jQuery 가 부른다. 오류는 {"message": "..."} 로 돌려준다. */
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class ApiController {
 
-    private final DatasetService datasetService;
-    private final DatasetQueryService datasetQueryService;
+    private final RawService rawService;
+    private final FeatureService featureService;
+    private final LabelService labelService;
+    private final SplitService splitService;
     private final JobService jobService;
-    private final com.mch.strategy.job.JobCancels jobCancels;
-    private final VizService vizService;
-    private final FeatureProfileService featureProfileService;
+    private final JobCancels jobCancels;
     private final CandleRepository candleRepository;
     private final MarketRepository marketRepository;
     private final AssetRepository assetRepository;
 
-    // ---------- 데이터 가져오기 ----------
+    // ---------------------------------------------------------------- 공통
 
-    /** 마켓별로 DB 에 이미 있는 1분봉 기간 */
+    /** 거래쌍별로 DB 에 이미 있는 1분봉 기간 (KST 날짜) */
     @GetMapping("/coverage")
     public List<Map<String, Object>> coverage() {
         Map<Long, CandleRepository.Coverage> byMarket = new LinkedHashMap<>();
@@ -72,17 +82,11 @@ public class ApiController {
         return out;
     }
 
-    @PostMapping("/datasets")
-    public Map<String, Long> createDataset(@Valid @RequestBody CreateDatasetRequest request) {
-        return datasetService.create(request);
-    }
-
     @GetMapping("/jobs/{id}")
     public Map<String, Object> job(@PathVariable long id) {
         return jobService.view(id);
     }
 
-    /** 진행 중인 데이터세트 만들기(수집 · 지표 계산)를 멈춘다. 몇 초 안에 다음 확인 지점에서 멈춘다. */
     @PostMapping("/jobs/{id}/cancel")
     public Map<String, Object> cancelJob(@PathVariable long id) {
         Map<String, Object> job = jobService.view(id);
@@ -90,69 +94,152 @@ public class ApiController {
             throw ApiException.badRequest("이미 끝난 작업입니다.");
         }
         jobCancels.request(id);
-        return Map.of("id", id, "cancelRequested", true);
+        return Map.of("id", id, "requested", true);
     }
 
-    // ---------- 데이터세트 ----------
+    // ---------------------------------------------------------------- ① 원본
 
-    @GetMapping("/datasets")
-    public List<DatasetViews.Summary> datasets() {
-        return datasetQueryService.list();
+    @PostMapping("/raw")
+    public RawService.Created createRaw(@RequestBody RawService.CreateRequest request) {
+        return rawService.create(request);
     }
 
-    @GetMapping("/datasets/{id}")
-    public DatasetViews.Detail dataset(@PathVariable long id) {
-        return datasetQueryService.detail(id);
-    }
-
-    @DeleteMapping("/datasets/{id}")
-    public Map<String, Object> deleteDataset(@PathVariable long id) {
-        datasetService.delete(id);
+    @DeleteMapping("/raw/{id}")
+    public Map<String, Object> deleteRaw(@PathVariable long id) {
+        if (!featureService.byRaw(id).isEmpty()) {
+            throw ApiException.badRequest("이 원본으로 만든 지표 데이터셋이 있어 지울 수 없습니다. 지표 데이터셋을 먼저 지우세요.");
+        }
+        rawService.delete(id);
         return Map.of("deleted", id);
     }
 
-    @GetMapping("/datasets/{id}/rows")
-    public Map<String, Object> rows(@PathVariable long id,
-                                    @RequestParam long assetId,
-                                    @RequestParam String interval,
-                                    @RequestParam(defaultValue = "false") boolean warmup,
-                                    @RequestParam(defaultValue = "0") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
-        return datasetQueryService.rows(id, assetId, interval, warmup, page, size);
+    // ---------------------------------------------------------------- ② 지표
+
+    public record PlanRequest(IndicatorConfig config, Long rawId) {
     }
 
-    // ---------- 시각화 ----------
-
-    @GetMapping("/viz/{id}/series")
-    public Map<String, Object> series(@PathVariable long id,
-                                      @RequestParam long assetId,
-                                      @RequestParam String interval,
-                                      @RequestParam(required = false) Long from,
-                                      @RequestParam(required = false) Long to,
-                                      @RequestParam(required = false) List<String> columns,
-                                      @RequestParam(required = false) Integer maxPoints) {
-        return vizService.series(id, assetId, interval,
-                from == null ? null : Instant.ofEpochMilli(from),
-                to == null ? null : Instant.ofEpochMilli(to),
-                columns, maxPoints);
+    @PostMapping("/features/plan")
+    public FeatureService.PlanView plan(@RequestBody PlanRequest request) {
+        if (request.config() == null) throw ApiException.badRequest("지표 설정이 없습니다.");
+        return featureService.plan(request.config(), request.rawId());
     }
 
-    @GetMapping("/viz/{id}/correlation")
-    public Map<String, Object> correlation(@PathVariable long id, @RequestParam long assetId,
-                                           @RequestParam String interval,
-                                           @RequestParam(required = false) List<String> columns) {
-        return vizService.correlation(id, assetId, interval, columns);
+    @PostMapping("/features")
+    public FeatureService.Created createFeature(@RequestBody FeatureService.CreateRequest request) {
+        return featureService.create(request);
     }
 
-    /** 변수 탐색: 한 열의 분포 · N봉 뒤 수익률과의 관계 · 지속성 · 시간대 · 관련 변수 */
-    @GetMapping("/viz/{id}/profile")
-    public Map<String, Object> profile(@PathVariable long id, @RequestParam long assetId,
-                                       @RequestParam String interval, @RequestParam String column,
-                                       @RequestParam(required = false) Integer horizon) {
-        return featureProfileService.profile(id, assetId, interval, column, horizon);
+    @DeleteMapping("/features/{id}")
+    public Map<String, Object> deleteFeature(@PathVariable long id) {
+        if (!labelService.byFeature(id).isEmpty()) {
+            throw ApiException.badRequest("이 지표 데이터셋으로 만든 정답이 있어 지울 수 없습니다. 정답을 먼저 지우세요.");
+        }
+        featureService.delete(id);
+        return Map.of("deleted", id);
     }
 
-    // ---------- 종목 관리 ----------
+    @GetMapping("/features/{id}/rows")
+    public FeatureService.RowsView featureRows(@PathVariable long id, @RequestParam long marketId,
+                                               @RequestParam(defaultValue = "0") int offset,
+                                               @RequestParam(defaultValue = "50") int limit,
+                                               @RequestParam(required = false) List<String> cols,
+                                               @RequestParam(required = false) String kind,
+                                               @RequestParam(required = false) String at) {
+        return featureService.rows(id, marketId, offset, limit, cols, kind, at);
+    }
+
+    @GetMapping("/features/{id}/export.csv")
+    public ResponseEntity<StreamingResponseBody> exportFeature(@PathVariable long id, @RequestParam long marketId) {
+        featureService.get(id);
+        StreamingResponseBody body = out -> {
+            Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+            try {
+                featureService.exportCsv(id, marketId, w);
+            } catch (IOException e) {
+                throw e;
+            }
+        };
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"features_" + id + "_market" + marketId + ".csv\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(body);
+    }
+
+    @GetMapping("/feature-presets")
+    public List<Map<String, Object>> presets() {
+        return featureService.presets();
+    }
+
+    public record PresetRequest(String name, IndicatorConfig config) {
+    }
+
+    @PostMapping("/feature-presets")
+    public Map<String, Object> savePreset(@RequestBody PresetRequest request) {
+        if (request.config() == null) throw ApiException.badRequest("지표 설정이 없습니다.");
+        FeaturePreset p = featureService.savePreset(request.name(), request.config());
+        return Map.of("id", p.getId(), "name", p.getName());
+    }
+
+    @DeleteMapping("/feature-presets/{id}")
+    public Map<String, Object> deletePreset(@PathVariable long id) {
+        featureService.deletePreset(id);
+        return Map.of("deleted", id);
+    }
+
+    // ---------------------------------------------------------------- ③ 정답
+
+    @PostMapping("/labels/preview")
+    public LabelSummary previewLabel(@RequestBody LabelService.PreviewRequest request) {
+        return labelService.preview(request);
+    }
+
+    @PostMapping("/labels")
+    public LabelService.Created createLabel(@RequestBody LabelService.CreateRequest request) {
+        return labelService.create(request);
+    }
+
+    @DeleteMapping("/labels/{id}")
+    public Map<String, Object> deleteLabel(@PathVariable long id) {
+        if (!splitService.byLabel(id).isEmpty()) {
+            throw ApiException.badRequest("이 정답으로 만든 분할 계획이 있어 지울 수 없습니다. 분할 계획을 먼저 지우세요.");
+        }
+        labelService.delete(id);
+        return Map.of("deleted", id);
+    }
+
+    @GetMapping("/labels/{id}/rows")
+    public Map<String, Object> labelRows(@PathVariable long id, @RequestParam long marketId,
+                                         @RequestParam(defaultValue = "0") int offset,
+                                         @RequestParam(defaultValue = "50") int limit,
+                                         @RequestParam(required = false) String status) {
+        return labelService.rows(id, marketId, offset, limit, status);
+    }
+
+    // ---------------------------------------------------------------- ④ 분할
+
+    @PostMapping("/splits/preview")
+    public SplitSummary previewSplit(@RequestBody SplitService.PreviewRequest request) {
+        return splitService.preview(request);
+    }
+
+    @PostMapping("/splits")
+    public Map<String, Object> createSplit(@RequestBody SplitService.CreateRequest request) {
+        SplitPlan p = splitService.create(request);
+        return Map.of("id", p.getId(), "status", p.getStatus().name());
+    }
+
+    @DeleteMapping("/splits/{id}")
+    public Map<String, Object> deleteSplit(@PathVariable long id) {
+        splitService.delete(id);
+        return Map.of("deleted", id);
+    }
+
+    @PostMapping("/splits/{id}/reveal-test")
+    public Map<String, Object> revealTest(@PathVariable long id) {
+        return splitService.revealTest(id);
+    }
+
+    // ---------------------------------------------------------------- 종목 관리
 
     @PatchMapping("/assets/{id}")
     @Transactional

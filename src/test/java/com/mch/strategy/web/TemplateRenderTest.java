@@ -1,9 +1,8 @@
 package com.mch.strategy.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -20,24 +19,33 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
-import com.mch.strategy.dataset.DatasetViews.AssetOption;
-import com.mch.strategy.dataset.DatasetViews.ColumnView;
-import com.mch.strategy.dataset.DatasetViews.Detail;
-import com.mch.strategy.dataset.DatasetViews.GapView;
-import com.mch.strategy.dataset.DatasetViews.QualityView;
-import com.mch.strategy.dataset.DatasetViews.Summary;
-import com.mch.strategy.feature.FeatureGroup;
-import com.mch.strategy.instrument.Asset;
+import com.mch.strategy.collect.CandleSeries;
+import com.mch.strategy.common.BuildStatus;
+import com.mch.strategy.common.Json;
+import com.mch.strategy.feature.FeatureSet;
+import com.mch.strategy.indicator.IndicatorConfig;
+import com.mch.strategy.indicator.IndicatorKind;
+import com.mch.strategy.indicator.IndicatorPlanner;
 import com.mch.strategy.instrument.Exchange;
-import com.mch.strategy.instrument.Market;
-import com.mch.strategy.instrument.MarketRole;
+import com.mch.strategy.label.LabelCalculator;
+import com.mch.strategy.label.LabelConfig;
+import com.mch.strategy.label.LabelOutcome;
+import com.mch.strategy.label.LabelSet;
+import com.mch.strategy.label.LabelSummary;
+import com.mch.strategy.raw.RawDataset;
+import com.mch.strategy.raw.RawQuality;
+import com.mch.strategy.split.SplitCalculator;
+import com.mch.strategy.split.SplitConfig;
+import com.mch.strategy.split.SplitPlan;
 
 import nz.net.ultraq.thymeleaf.layoutdialect.LayoutDialect;
 
-/** DB 없이 Thymeleaf 화면을 가짜 데이터로 실제 렌더링해 본다 (문법 · 레코드 접근 · 레이아웃 확인). */
+/** DB 없이 V2 화면을 가짜 데이터로 실제 렌더링해 본다 (문법 · 레코드 접근 · 레이아웃 · 용어 표시 확인). */
 class TemplateRenderTest {
 
     static SpringTemplateEngine engine;
+    static final Instant FROM = Instant.parse("2026-01-01T00:00:00Z");
+    static final Instant TO = Instant.parse("2026-01-11T00:00:00Z");
 
     @BeforeAll
     static void setUp() {
@@ -57,140 +65,235 @@ class TemplateRenderTest {
         });
     }
 
-    @Test
-    void collect_page() {
-        Map<String, Object> m = base("collect");
-        m.put("assets", List.of(asset(1, "BTC", "비트코인"), asset(2, "ETH", "이더리움")));
-        m.put("sources", List.of(Exchange.values()));
-        m.put("intervals", List.of("1m", "5m", "15m"));
-        Map<FeatureGroup, List<Map<String, Object>>> groups = new LinkedHashMap<>();
-        groups.put(FeatureGroup.A_RETURN, List.of(feature("log_return", 4, List.of(), List.of())));
-        groups.put(FeatureGroup.E_VOLUME, List.of(feature("upbit_volume_share", 2, List.of("BOTH_EXCHANGES"), List.of("업비트·바이낸스 1분봉 모두 필요"))));
-        m.put("featureGroups", groups);
-        m.put("defaultFrom", LocalDate.of(2026, 10, 15));
-        m.put("defaultTo", LocalDate.of(2026, 10, 21));
-        m.put("maxDate", LocalDate.of(2026, 10, 21));
-
-        String html = render("collect/index", m);
-        assertThat(html).contains("데이터 가져오기", "data-code=\"BTC\"", "업비트 1분봉", "바이낸스 1분봉",
-                "data-requires=\"BOTH_EXCHANGES\"", "A. 수익률·모멘텀", "data-hover-term=\"feat_log_return\"", "data-hover-term=\"grp_A\"", "cancelBtn", "/js/collect.js", "class=\"sidebar\"",
-                "nav-item active");
-        assertThat(html).contains("<title>데이터 가져오기 · 자동 전략 탐색</title>");
+    static String render(String view, Map<String, Object> model) {
+        Context ctx = new Context(Locale.KOREA);
+        ctx.setVariables(model);
+        return engine.process(view, ctx);
     }
 
-    @Test
-    void dataset_pages() {
-        assertThat(render("datasets/list", base("datasets"))).contains("/js/datasets.js", "statusFilter");
-
-        Map<String, Object> m = base("datasets");
-        m.put("d", detail("READY"));
-        String html = render("datasets/detail", m);
-        assertThat(html).contains("BTC·ETH 7일", "tag-green", "25,536", "rsi_14", "빈 구간", "업비트 KRW-ETH",
-                "/viz?datasetId=3", "/collect?copy=3", "previewTable");
-
-        m.put("d", detail("COMPUTING"));
-        assertThat(render("datasets/detail", m)).contains("buildingBox", "tag-blue", "data-cancel-job=\"9\"").doesNotContain("previewTable");
-    }
-
-    @Test
-    void viz_page() {
-        Map<String, Object> m = base("viz");
-        Detail d = detail("READY");
-        m.put("datasets", List.of(d.summary()));
-        m.put("d", d);
-        String html = render("viz/index", m);
-        assertThat(html).contains("data-columns=\"open,close,rsi_14\"", "data-features=\"rsi_14\"", "echarts", "/js/viz.js");
-
-        Map<String, Object> empty = base("viz");
-        empty.put("datasets", List.of());
-        assertThat(render("viz/index", empty)).contains("완료된 데이터세트가 없습니다");
-    }
-
-    @Test
-    void feature_explore_page() {
-        Map<String, Object> m = base("features");
-        Detail d = detail("READY");
-        m.put("datasets", List.of(d.summary()));
-        m.put("d", d);
-        m.put("navGroups", List.of(
-                Map.of("code", "-", "label", "봉 값", "columns", d.columns().subList(0, 2)),
-                Map.of("code", "C", "label", "C. 범위 안의 위치·강도", "columns", d.columns().subList(2, 3))));
-        m.put("groupLabels", Map.of("C", "범위 안의 위치·강도"));
-        m.put("docs", Map.of("rsi_14", com.mch.strategy.feature.FeatureDocs.find("rsi_14").orElseThrow()));
-        m.put("selected", "rsi_14");
-        String html = render("datasets/features", m);
-        assertThat(html).contains("변수 탐색", "data-selected=\"rsi_14\"", "/datasets/3/features?col=rsi_14",
-                "feat-nav-item active", "C. 범위 안의 위치·강도", "/js/feature-explore.js", "nav-item active",
-                "\"refLines\":[0.3,0.5,0.7]"); // 설명이 JS 변수로 들어간다
-
-        m.put("d", detail("COMPUTING"));
-        assertThat(render("datasets/features", m)).contains("완료된 데이터세트만").doesNotContain("feature-explore.js");
-
-        Map<String, Object> empty = base("features");
-        empty.put("datasets", List.of());
-        assertThat(render("datasets/features", empty)).contains("완료된 데이터세트가 없습니다");
-    }
-
-    @Test
-    void instruments_page() {
-        Map<String, Object> m = base("instruments");
-        m.put("assets", List.of(asset(1, "BTC", "비트코인")));
-        Market market = mock(Market.class);
-        when(market.getId()).thenReturn(1L);
-        when(market.getExchange()).thenReturn(Exchange.UPBIT);
-        when(market.getSymbol()).thenReturn("KRW-BTC");
-        when(market.getQuoteCurrency()).thenReturn("KRW");
-        when(market.getRole()).thenReturn(MarketRole.EXECUTION);
-        when(market.isEnabled()).thenReturn(true);
-        m.put("markets", List.of(market));
-        String html = render("instruments/index", m);
-        assertThat(html).contains("KRW-BTC", "tag-blue", "/api/markets/1", "/api/assets/1");
-    }
-
-    private static String render(String template, Map<String, Object> vars) {
-        return engine.process(template, new Context(Locale.KOREAN, vars));
-    }
-
-    private static Map<String, Object> base(String menu) {
+    static Map<String, Object> base(String menu) {
         Map<String, Object> m = new HashMap<>();
         m.put("menu", menu);
         return m;
     }
 
-    private static Asset asset(long id, String code, String name) {
-        Asset a = mock(Asset.class);
-        when(a.getId()).thenReturn(id);
-        when(a.getCode()).thenReturn(code);
-        when(a.getName()).thenReturn(name);
-        when(a.isEnabled()).thenReturn(true);
-        return a;
+    static RawDataset raw() {
+        RawDataset d = new RawDataset();
+        d.setId(1L);
+        d.setName("업비트 BTC·ETH 10일");
+        d.setStatus(BuildStatus.READY);
+        d.setExchange(Exchange.UPBIT);
+        d.setMarketIdList(List.of(1L, 2L));
+        d.setRangeFrom(FROM);
+        d.setRangeTo(TO);
+        d.setRowCount(28800);
+        d.setCreatedAt(TO);
+        long[] t = {FROM.toEpochMilli(), FROM.toEpochMilli() + 60_000, FROM.toEpochMilli() + 180_000};
+        double[] p = {100, 101, 102};
+        CandleSeries s = new CandleSeries(t, p, p, p, p, p, p, p, p);
+        RawQuality.MarketQuality q = RawQuality.check(1, "BTC", "KRW-BTC", "KRW", s, FROM, TO, Instant.now());
+        d.setQuality(Json.write(List.of(q)));
+        return d;
     }
 
-    private static Map<String, Object> feature(String code, int columns, List<String> requires, List<String> texts) {
-        Map<String, Object> f = new LinkedHashMap<>();
-        f.put("code", code);
-        f.put("name", code);
-        f.put("param", "p");
-        f.put("requires", requires);
-        f.put("requiresText", texts);
-        f.put("columns", columns);
+    static FeatureSet feature() {
+        FeatureSet f = new FeatureSet();
+        f.setId(2L);
+        f.setName("기본 지표");
+        f.setStatus(BuildStatus.READY);
+        f.setRawDatasetId(1L);
+        f.setConfig(Json.write(IndicatorConfig.defaults()));
+        f.setCodeVersion(IndicatorPlanner.CODE_VERSION);
+        f.setColumnCount(10);
+        f.setPlannedCount(12);
+        f.setRowCount(28800);
+        f.setCreatedAt(TO);
         return f;
     }
 
-    private static Detail detail(String status) {
-        boolean building = !status.equals("READY") && !status.equals("FAILED");
-        Summary s = new Summary(3, "BTC·ETH 7일", status, building ? "지표 계산" : "완료", building,
-                List.of("BTC", "ETH"), "2026-10-15 ~ 2026-10-21", List.of("1분", "15분"), 3, building ? 0 : 25536,
-                "2026-10-22 14:31", 9L, building ? 62 : 100, building ? "지표 계산" : "완료", "");
-        return new Detail(s, "2026-10-15 09:00 ~ 2026-10-22 08:59", "2026-10-13 18:00",
-                List.of("업비트 KRW-BTC · KRW-ETH"),
-                List.of(new ColumnView(0, "open", "bar", "봉 값", "-", ""), new ColumnView(1, "close", "bar", "봉 값", "-", ""),
-                        new ColumnView(2, "rsi_14", "rsi", "RSI", "C", "14")),
-                1,
-                building ? List.of() : List.of(new QualityView("업비트 KRW-ETH", 10080, 10071, "99.91%", "빈 구간 1개 · 9분", false)),
-                building ? List.of() : List.of(new GapView("업비트 KRW-ETH", "2026-10-19 05:12", "2026-10-19 05:20", 9)),
-                List.of(new AssetOption(1, "BTC"), new AssetOption(2, "ETH")),
-                List.of("1m", "15m"), "4분 12초",
-                List.of(1L, 2L), List.of("UPBIT"), List.of("rsi"), "2026-10-15", "2026-10-21");
+    static LabelConfig labelConfig() {
+        return new LabelConfig(30, 0.5, 0.3, "LONG", "NEXT_OPEN", "AMBIGUOUS", true, 0.05, 0.02);
+    }
+
+    static LabelSet label() {
+        LabelSet l = new LabelSet();
+        l.setId(3L);
+        l.setName("H30 P0.5 L0.3");
+        l.setStatus(BuildStatus.READY);
+        l.setFeatureSetId(2L);
+        l.setConfig(Json.write(labelConfig()));
+        l.setExploreTo(Instant.parse("2026-01-09T00:00:00Z"));
+        l.setCodeVersion(LabelConfig.CODE_VERSION);
+        l.setRowCount(28800);
+        l.setCreatedAt(TO);
+        long[] t = {FROM.toEpochMilli(), FROM.toEpochMilli() + 60_000, TO.toEpochMilli() - 60_000};
+        double[] p = {100, 101, 99};
+        LabelCalculator.Result r = LabelCalculator.compute(t, p, p, p, p, labelConfig());
+        LabelSummary.MarketSummary ms = LabelSummary.summarize(1, "BTC · 업비트 KRW-BTC", t, r, 0, l.getExploreTo().toEpochMilli());
+        l.setSummary(Json.write(new LabelSummary(List.of(ms), List.of("경고 예시"))));
+        return l;
+    }
+
+    static SplitConfig splitConfig() {
+        return new SplitConfig(null, null, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 6),
+                LocalDate.of(2026, 1, 7), LocalDate.of(2026, 1, 9), LocalDate.of(2026, 1, 10), 31);
+    }
+
+    static SplitPlan split() {
+        SplitPlan p = new SplitPlan();
+        p.setId(4L);
+        p.setName("첫 분할");
+        p.setStatus(BuildStatus.READY);
+        p.setLabelSetId(3L);
+        p.setConfig(Json.write(splitConfig()));
+        p.setCodeVersion(SplitConfig.CODE_VERSION);
+        p.setCreatedAt(TO);
+        return p;
+    }
+
+    static Map<Long, String> marketLabels() {
+        Map<Long, String> m = new LinkedHashMap<>();
+        m.put(1L, "BTC · 업비트 KRW-BTC");
+        m.put(2L, "ETH · 업비트 KRW-ETH");
+        return m;
+    }
+
+    @Test
+    void home_and_lists() {
+        Map<String, Object> m = base("home");
+        m.put("raws", List.of(raw()));
+        m.put("features", List.of(feature()));
+        m.put("labels", List.of(label()));
+        m.put("splits", List.of(split()));
+        String home = render("home", m);
+        assertThat(home).contains("자동 전략 탐색 V2", "data-term=\"v2Flow\"", "nav-item active", "후속 설계");
+
+        m = base("raw");
+        m.put("raws", List.of(raw()));
+        m.put("marketLabels", marketLabels());
+        m.put("featureCounts", Map.of(1L, 1));
+        assertThat(render("raw/list", m)).contains("업비트 BTC·ETH 10일", "2026-01-01 ~ 2026-01-10", "지표 만들기 →");
+
+        m = base("features");
+        m.put("features", List.of(feature()));
+        m.put("rawNames", Map.of(1L, "원본"));
+        m.put("labelCounts", Map.of(2L, 0));
+        assertThat(render("features/list", m)).contains("기본 지표", IndicatorPlanner.CODE_VERSION);
+
+        m = base("labels");
+        m.put("labels", List.of(label()));
+        m.put("configs", Map.of(3L, labelConfig()));
+        m.put("featureNames", Map.of(2L, "기본 지표"));
+        m.put("splitCounts", Map.of(3L, 0));
+        assertThat(render("labels/list", m)).contains("30분", "0.5%", "long · 다음 시가 · 동시=불가 · 비용");
+
+        m = base("splits");
+        m.put("splits", List.of(split()));
+        m.put("configs", Map.of(4L, splitConfig()));
+        m.put("labelNames", Map.of(3L, "정답"));
+        assertThat(render("splits/list", m)).contains("2026-01-01 ~ 2026-01-05", "31분", "0회");
+    }
+
+    @Test
+    void raw_pages() {
+        Map<String, Object> m = base("raw");
+        m.put("assets", List.of());
+        m.put("exchanges", List.of(Exchange.values()));
+        m.put("defaultFrom", LocalDate.of(2026, 1, 1));
+        m.put("defaultTo", LocalDate.of(2026, 1, 7));
+        m.put("maxDate", LocalDate.of(2026, 1, 7));
+        assertThat(render("raw/new", m)).contains("업비트", "바이낸스", "/js/raw-new.js", "jobBox");
+
+        RawDataset d = raw();
+        m = base("raw");
+        m.put("d", d);
+        m.put("quality", com.mch.strategy.raw.RawService.quality(d));
+        m.put("marketLabels", marketLabels());
+        m.put("children", List.of(feature()));
+        m.put("job", null);
+        String html = render("raw/detail", m);
+        assertThat(html).contains("입력 검사", "KRW-BTC", "빈 1분 목록", "확인할 점");
+    }
+
+    @Test
+    void feature_pages() {
+        Map<String, Object> m = base("features");
+        m.put("raws", List.of(raw()));
+        m.put("rawQualityJson", "{}");
+        m.put("configJson", Json.write(IndicatorConfig.defaults()));
+        m.put("defaultsJson", Json.write(IndicatorConfig.defaults()));
+        m.put("selectedRaw", 1L);
+        m.put("initialName", "");
+        m.put("bundlesJson", Json.write(IndicatorPlanner.BUNDLES));
+        m.put("kinds", IndicatorKind.values());
+        m.put("marketLabels", marketLabels());
+        m.put("codeVersion", IndicatorPlanner.CODE_VERSION);
+        String html = render("features/new", m);
+        assertThat(html).contains("data-path=\"volume.periods\"", "data-path=\"ma.pairScope\"", "data-hover-term=\"b_RSI_stoch\"",
+                "data-path=\"bb.multipliers\"", "data-term=\"ind_MACD\"", "/js/feature-new.js", "sticky-summary");
+
+        m = base("features");
+        m.put("f", feature());
+        m.put("raw", raw());
+        m.put("columnsJson", "[]");
+        m.put("configJson", Json.write(IndicatorConfig.defaults()));
+        m.put("marketIds", List.of(1L, 2L));
+        m.put("marketLabels", marketLabels());
+        m.put("marketLabelsJson", Json.write(marketLabels()));
+        m.put("kinds", IndicatorKind.values());
+        m.put("children", List.of(label()));
+        m.put("job", null);
+        assertThat(render("features/detail", m)).contains("행 보기", "CSV 내보내기", "중복 제거 전 12", "/js/feature-detail.js");
+    }
+
+    @Test
+    void label_pages() {
+        Map<String, Object> m = base("labels");
+        m.put("features", List.of(feature()));
+        m.put("featureInfoJson", "{}");
+        m.put("configJson", "null");
+        m.put("initialExploreTo", null);
+        m.put("initialName", "");
+        m.put("selectedFeature", 2L);
+        m.put("outcomes", LabelOutcome.values());
+        assertThat(render("labels/new", m)).contains("H 최대 관찰 시간", "data-term=\"sameBar\"", "탐색 기간 끝", "/js/label-new.js");
+
+        LabelSet l = label();
+        m = base("labels");
+        m.put("l", l);
+        m.put("f", feature());
+        m.put("raw", raw());
+        m.put("c", labelConfig());
+        m.put("summaryJson", l.getSummary());
+        m.put("marketIds", List.of(1L));
+        m.put("marketLabels", marketLabels());
+        m.put("outcomes", LabelOutcome.values());
+        m.put("children", List.of(split()));
+        m.put("job", null);
+        assertThat(render("labels/detail", m)).contains("H 30분", "P 0.5%", "비용 반영", "왕복 0.14", "판정 종료");
+    }
+
+    @Test
+    void split_pages() {
+        Map<String, Object> m = base("splits");
+        m.put("labels", List.of(label()));
+        m.put("labelInfoJson", "{}");
+        m.put("configJson", "null");
+        m.put("initialName", "");
+        m.put("selectedLabel", 3L);
+        m.put("reasons", SplitCalculator.Reason.values());
+        assertThat(render("splits/new", m)).contains("id=\"trainFrom\"", "data-term=\"embargo\"", "/js/split-new.js");
+
+        m = base("splits");
+        m.put("p", split());
+        m.put("l", label());
+        m.put("f", feature());
+        m.put("raw", raw());
+        m.put("lc", labelConfig());
+        m.put("c", splitConfig());
+        m.put("summaryJson", "null");
+        m.put("testViewLog", List.of(TO));
+        String html = render("splits/detail", m);
+        assertThat(html).contains("재현 경로", "원본 #1", "지표 #2", "정답 #3", "2026-01-01 ~ 2026-01-05", "최종 테스트 분포 열기", "\"2026-01-09\"");
     }
 }

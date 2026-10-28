@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${f.name}">지표</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/features}">🧮 기술 지표</a><span class="sep">/</span><span class="crumb current" th:text="${'#' + f.id + ' ' + f.name}">지표</span>
+</div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🧮</div>
+      <h1 class="page-title" th:text="${f.name}">지표</h1>
+      <div class="page-desc"><span data-term="featureSet">기술 지표 데이터셋</span> <span th:text="${'#' + f.id}"></span> · 원본 1분봉 행 + 지표 열</div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-primary" th:if="${f.status.name() == 'READY'}" th:href="@{/labels/new(featureSetId=${f.id})}">이 데이터셋으로 정답 만들기 →</a>
+      <a class="btn btn-outline" th:href="@{/features/new(copy=${f.id})}">같은 설정으로 새로 만들기</a>
+      <button type="button" class="btn btn-danger-ghost" th:data-delete-url="@{/api/features/{id}(id=${f.id})}" th:data-after="@{/features}"
+              data-delete-confirm="지표 데이터셋과 데이터 폴더의 지표 파일을 지울까요? 원본 1분봉은 남습니다.">지우기</button>
+    </div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(2)}"></div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label">상태</div><div class="prop-value"><span th:replace="~{fragments/ui :: statusTag(${f.status})}"></span>
+      <span class="small muted" th:if="${f.message != null}" th:text="${f.message}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="rawDataset">원본</span></div><div class="prop-value">
+      <a class="link" th:href="@{/raw/{id}(id=${raw.id})}" th:text="${'#' + raw.id + ' ' + raw.name}"></a>
+      <span class="small muted" th:text="${raw.exchange.label + ' · UTC ' + TU.utcDate(raw.rangeFrom) + ' ~ ' + TU.utcLastDate(raw.rangeTo)}"></span></div></div>
+    <div class="prop"><div class="prop-label">행 수 · 열 수</div><div class="prop-value">
+      <span th:text="${#numbers.formatInteger(f.rowCount, 1, 'COMMA') + '행 (거래쌍 합)'}"></span>
+      <span class="muted">·</span>
+      <span>원본 열 6 (시각 · OHLCV) + 지표 열 <b th:text="${f.columnCount}"></b></span>
+      <span class="small muted" th:if="${f.plannedCount != f.columnCount}" th:text="${'(중복 제거 전 ' + f.plannedCount + ')'}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="codeVersion">계산 코드 버전</span></div><div class="prop-value mono" th:text="${f.codeVersion}"></div></div>
+    <div class="prop"><div class="prop-label">만든 시각</div><div class="prop-value num"
+      th:text="${TU.toKstText(f.createdAt) + ' KST' + (f.finishedAt != null ? ' → 끝 ' + TU.toKstText(f.finishedAt) : '')}"></div></div>
+  </div>
+
+  <div th:replace="~{fragments/ui :: jobBox}"></div>
+  <div id="jobInfo" th:if="${job != null and job.status.name() == 'RUNNING'}" th:data-job="${job.id}"></div>
+
+  <h2 class="section-title">지표별 열 수</h2>
+  <div class="cards" id="kindCards"></div>
+
+  <h2 class="section-title">열 목록 <span class="count" id="colCount"></span>
+    <span class="section-actions">
+      <select class="form-select form-select-sm" id="colKind" style="width:auto"><option value="">모든 지표</option>
+        <option th:each="k : ${kinds}" th:value="${k.name()}" th:text="${k.label}"></option></select>
+      <input type="search" class="form-control form-control-sm" id="colSearch" placeholder="열 이름 · 설명 검색" style="width:200px">
+    </span>
+  </h2>
+  <div class="small muted" style="margin-bottom:6px">열 이름에 마우스를 올리면 계산식 · 읽는 법이 나옵니다. <span data-term="nullValue">null 수</span>와 첫 유효 시각은 거래쌍별입니다.
+    <span data-term="correlated">비슷한 열에 대해</span></div>
+  <div class="scroll-box">
+    <table class="db-table db-table--compact col-table">
+      <thead id="colHead"></thead>
+      <tbody id="colBody"></tbody>
+    </table>
+  </div>
+
+  <th:block th:if="${f.status.name() == 'READY'}">
+    <h2 class="section-title">행 보기 <span class="count" id="rowInfo"></span>
+      <span class="section-actions">
+        <select class="form-select form-select-sm" id="rowMarket" style="width:auto">
+          <option th:each="m : ${marketIds}" th:value="${m}" th:text="${marketLabels.get(m)}"></option>
+        </select>
+        <a class="btn btn-outline btn-sm" id="exportLink" href="#">CSV 내보내기</a>
+      </span>
+    </h2>
+    <div class="toolbar">
+      <span class="small muted">보일 열</span>
+      <select class="form-select form-select-sm" id="rowKind" style="width:auto"><option value="">처음 12개</option>
+        <option th:each="k : ${kinds}" th:value="${k.name()}" th:text="${k.label + ' 전부'}"></option></select>
+      <span class="small muted" style="margin-left:10px">이동</span>
+      <input type="datetime-local" class="form-control form-control-sm" id="rowAt" style="width:auto">
+      <span class="small faint">UTC</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowGo">이 시각부터</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowFirst">처음</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowPrev">← 이전 50</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowNext">다음 50 →</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowLast">끝</button>
+    </div>
+    <div class="db-table-wrap" style="max-height:560px; overflow:auto">
+      <table class="db-table db-table--compact" id="previewTable"><thead></thead><tbody></tbody></table>
+    </div>
+    <div class="small muted" style="margin-top:4px">회색 열 = 원본(시각 · OHLCV), 나머지 = 지표 열. 빈 칸은 null 입니다. CSV 는 원본 열과 지표 열을 모두 담습니다 (행이 많으면 파일이 큽니다).</div>
+  </th:block>
+
+  <h2 class="section-title"><span data-term="reproduce">재현 정보</span></h2>
+  <details class="toggle">
+    <summary><span class="arrow">▶</span>설정 스냅샷 (JSON)</summary>
+    <div class="toggle-body"><pre class="rule-box" id="configJson"></pre></div>
+  </details>
+
+  <h2 class="section-title">이 데이터셋으로 만든 정답 <span class="count" th:text="${children.size()}">0</span></h2>
+  <div class="db-table-wrap" th:if="${!children.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th>만든 시각 (KST)</th></tr></thead>
+      <tbody><tr th:each="l : ${children}">
+        <td class="num faint" th:text="${'#' + l.id}"></td>
+        <td><a class="row-title" th:href="@{/labels/{id}(id=${l.id})}" th:text="${l.name}"></a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${l.status})}"></span></td>
+        <td class="num" th:text="${TU.toKstText(l.createdAt)}"></td>
+      </tr></tbody>
+    </table>
+  </div>
+  <div class="small muted" th:if="${children.isEmpty()}">아직 없습니다.</div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var FEATURE = {
+      id: /*[[${f.id}]]*/ 0,
+      ready: /*[[${f.status.name() == 'READY'}]]*/ false,
+      columns: JSON.parse(/*[[${columnsJson}]]*/ '[]'),
+      config: JSON.parse(/*[[${configJson}]]*/ '{}'),
+      marketIds: /*[[${marketIds}]]*/ [],
+      marketLabels: JSON.parse(/*[[${marketLabelsJson}]]*/ '{}')
+    };
+  </script>
+  <script th:src="@{/js/feature-detail.js}"></script>
+</th:block>
+</body>
+</html>

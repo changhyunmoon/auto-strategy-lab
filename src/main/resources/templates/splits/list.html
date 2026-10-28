@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>학습·검증·테스트 분할</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">✂️ 학습·검증·테스트 분할</span></div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">✂️</div>
+      <h1 class="page-title">학습 · 검증 · 최종 테스트 분할</h1>
+      <div class="page-desc">정답 데이터셋의 행마다 <span data-term="trainSplit">학습</span> · <span data-term="valSplit">검증</span> · <span data-term="testSplit">최종 테스트</span> 소속 또는 제외 사유를 정한 계획입니다. 데이터를 복사하지 않고 소속만 저장합니다.</div>
+    </div>
+    <div class="page-head-actions"><a class="btn btn-primary" th:href="@{/splits/new}">＋ 분할 만들기</a></div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(4)}"></div>
+
+  <div class="db-table-wrap" th:if="${!splits.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th>정답</th><th>학습 (UTC)</th><th>검증</th><th>최종 테스트</th><th class="num">경계 여유</th>
+        <th class="num"><span data-term="testReveal">테스트 열람</span></th><th>만든 시각 (KST)</th></tr></thead>
+      <tbody>
+      <tr th:each="p : ${splits}" th:with="c=${configs.get(p.id)}">
+        <td class="num faint" th:text="${'#' + p.id}"></td>
+        <td><a class="row-title" th:href="@{/splits/{id}(id=${p.id})}" th:text="${p.name}"></a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${p.status})}"></span></td>
+        <td><a class="link small" th:href="@{/labels/{id}(id=${p.labelSetId})}" th:text="${'#' + p.labelSetId + ' ' + labelNames.getOrDefault(p.labelSetId, '(지워짐)')}"></a></td>
+        <td class="num small" th:text="${c.trainFrom + ' ~ ' + c.trainTo}"></td>
+        <td class="num small" th:text="${c.valFrom + ' ~ ' + c.valTo}"></td>
+        <td class="num small" th:text="${c.testFrom + ' ~ ' + c.testTo}"></td>
+        <td class="num" th:text="${c.embargoMinutes + '분'}"></td>
+        <td class="num" th:text="${p.testViews + '회'}"></td>
+        <td class="num" th:text="${TU.toKstText(p.createdAt)}"></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty" th:if="${splits.isEmpty()}">
+    <div class="empty-icon">✂️</div>
+    <div>아직 만든 분할 계획이 없습니다.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/splits/new}">＋ 분할 만들기</a>
+  </div>
+</div>
+</body>
+</html>

@@ -1,19 +1,20 @@
 <!doctype html>
 <html lang="ko" xmlns:th="http://www.thymeleaf.org">
 <body>
-<!-- menu: 현재 메뉴 이름 (컨트롤러가 model 에 "menu" 로 넣는다) -->
+<!-- menu: 현재 메뉴 이름 (컨트롤러가 model 에 "menu" 로 넣는다). 순서 = V2 데이터 제작 흐름 -->
 <aside class="sidebar" th:fragment="sidebar(menu)">
-  <div class="sidebar-brand"><span class="brand-icon">S</span>자동 전략 탐색</div>
-  <a class="nav-item" th:classappend="${menu == 'collect'} ? 'active'" th:href="@{/collect}"><span class="nav-icon">📥</span>데이터 가져오기</a>
-  <a class="nav-item" th:classappend="${menu == 'datasets'} ? 'active'" th:href="@{/datasets}"><span class="nav-icon">🗂️</span>데이터세트</a>
-  <a class="nav-item" th:classappend="${menu == 'viz'} ? 'active'" th:href="@{/viz}"><span class="nav-icon">📊</span>시각화</a>
-  <a class="nav-item" th:classappend="${menu == 'features'} ? 'active'" th:href="@{/features}"><span class="nav-icon">🔎</span>변수 탐색</a>
-  <a class="nav-item" th:classappend="${menu == 'instruments'} ? 'active'" th:href="@{/instruments}"><span class="nav-icon">🪙</span>종목 관리</a>
+  <div class="sidebar-brand"><span class="brand-icon">S</span>자동 전략 탐색 <span class="tag tag-blue brand-ver">V2</span></div>
+  <a class="nav-item" th:classappend="${menu == 'home'} ? 'active'" th:href="@{/}"><span class="nav-icon">🧭</span>전체 흐름</a>
+  <div class="sidebar-section">데이터 만들기</div>
+  <a class="nav-item" th:classappend="${menu == 'raw'} ? 'active'" th:href="@{/raw}"><span class="nav-icon">📥</span><span class="nav-step">1</span>원본 1분봉</a>
+  <a class="nav-item" th:classappend="${menu == 'features'} ? 'active'" th:href="@{/features}"><span class="nav-icon">🧮</span><span class="nav-step">2</span>기술 지표</a>
+  <a class="nav-item" th:classappend="${menu == 'labels'} ? 'active'" th:href="@{/labels}"><span class="nav-icon">🎯</span><span class="nav-step">3</span>정답 (H·P·L)</a>
+  <a class="nav-item" th:classappend="${menu == 'splits'} ? 'active'" th:href="@{/splits}"><span class="nav-icon">✂️</span><span class="nav-step">4</span>학습·검증·테스트 분할</a>
   <div class="sidebar-section">모델</div>
-  <a class="nav-item" th:classappend="${menu == 'trainsets'} ? 'active'" th:href="@{/trainsets}"><span class="nav-icon">🏷️</span>학습 데이터</a>
-  <a class="nav-item" th:classappend="${menu == 'training'} ? 'active'" th:href="@{/training}"><span class="nav-icon">🧠</span>모델 학습</a>
-  <a class="nav-item" th:classappend="${menu == 'runs'} ? 'active'" th:href="@{/runs}"><span class="nav-icon">🧪</span>실험 결과</a>
-  <div class="sidebar-footer">시각은 KST로 표시</div>
+  <span class="nav-item disabled" title="노션 V2 에서 아직 설계 전인 단계입니다"><span class="nav-icon">🧠</span>모델 학습·평가<span class="soon">후속 설계</span></span>
+  <div class="sidebar-section">설정</div>
+  <a class="nav-item" th:classappend="${menu == 'instruments'} ? 'active'" th:href="@{/instruments}"><span class="nav-icon">🪙</span>종목 관리</a>
+  <div class="sidebar-footer">날짜 입력은 UTC · 표의 시각은 KST<br>용어 옆 ⓘ 에 설명이 있습니다</div>
 </aside>
 </body>
 </html>

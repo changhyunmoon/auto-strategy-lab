@@ -8,7 +8,7 @@
 <div layout:fragment="topbar" class="topbar"><span class="crumb current">🪙 종목 관리</span></div>
 
 <div layout:fragment="content" class="page">
-  <div th:replace="~{fragments/ui :: pageHead('🪙', '종목 관리', '데이터 가져오기 화면의 종목 선택지와, 종목마다 데이터를 받을 거래소 마켓입니다.')}"></div>
+  <div th:replace="~{fragments/ui :: pageHead('🪙', '종목 관리', '「새 원본 받기」 화면의 종목 선택지와, 종목마다 1분봉을 받을 거래소 거래쌍입니다.')}"></div>
 
   <h2 class="section-title">종목 <span class="count" th:text="${assets.size()}">2</span></h2>
   <div class="db-table-wrap">
@@ -27,7 +27,7 @@
   <h2 class="section-title">거래소 마켓 <span class="count" th:text="${markets.size()}">4</span></h2>
   <div class="db-table-wrap">
     <table class="db-table">
-      <thead><tr><th>거래소</th><th>거래쌍</th><th>표시 통화</th><th>역할</th><th>DB에 있는 기간 (KST)</th><th style="width:80px">사용</th></tr></thead>
+      <thead><tr><th><span data-term="exchange">거래소</span></th><th><span data-term="pair">거래쌍</span></th><th>표시 통화</th><th>역할 (V1)</th><th>DB에 있는 기간 (KST)</th><th style="width:80px">사용</th></tr></thead>
       <tbody>
       <tr th:each="m : ${markets}">
         <td th:text="${m.exchange.label}">업비트</td>
@@ -43,7 +43,7 @@
 
   <div class="callout" style="margin-top:20px">
     <div class="callout-icon">ℹ️</div>
-    <div class="callout-body small">끈 종목·마켓은 데이터 가져오기에서 고를 수 없습니다. 새 종목·마켓 등록은 다음 단계에서 추가합니다.</div>
+    <div class="callout-body small">끈 종목 · 거래쌍은 「새 원본 받기」에서 고를 수 없습니다. V2 는 원본마다 거래소 하나를 고르므로 「역할(실행/참고)」은 쓰지 않습니다 (V1 에서 쓰던 값). 1분봉은 V1 · V2 가 같은 DB 표(candle_1m)를 함께 씁니다.</div>
   </div>
 </div>
 

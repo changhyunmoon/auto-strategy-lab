@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${d.name}">원본</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/raw}">📥 원본 1분봉</a><span class="sep">/</span><span class="crumb current" th:text="${'#' + d.id + ' ' + d.name}">원본</span>
+</div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">📥</div>
+      <h1 class="page-title" th:text="${d.name}">원본</h1>
+      <div class="page-desc"><span data-term="rawDataset">원본 데이터셋</span> <span th:text="${'#' + d.id}"></span> · 1분봉 1개 = 1행</div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-primary" th:if="${d.status.name() == 'READY'}" th:href="@{/features/new(rawId=${d.id})}">이 원본으로 지표 만들기 →</a>
+      <button type="button" class="btn btn-danger-ghost" th:data-delete-url="@{/api/raw/{id}(id=${d.id})}" th:data-after="@{/raw}"
+              data-delete-confirm="원본 데이터셋을 지울까요? DB 의 1분봉(candle_1m)은 다른 원본과 함께 쓰므로 지우지 않고, 이 묶음 정보만 지웁니다.">지우기</button>
+    </div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(1)}"></div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label">상태</div><div class="prop-value"><span th:replace="~{fragments/ui :: statusTag(${d.status})}"></span>
+      <span class="small muted" th:if="${d.message != null}" th:text="${d.message}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="exchange">거래소</span></div><div class="prop-value" th:text="${d.exchange.label}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="pair">거래쌍</span></div><div class="prop-value">
+      <span class="tag" th:each="m : ${d.marketIdList()}" th:text="${marketLabels.get(m)}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="halfOpen">기간</span></div><div class="prop-value num"
+      th:text="${'UTC ' + TU.toUtcText(d.rangeFrom) + ' ~ ' + TU.toUtcText(d.rangeTo) + ' (끝 제외)'}"></div></div>
+    <div class="prop"><div class="prop-label">행 수</div><div class="prop-value num" th:text="${#numbers.formatInteger(d.rowCount, 1, 'COMMA')}"></div></div>
+    <div class="prop"><div class="prop-label">만든 시각</div><div class="prop-value num" th:text="${TU.toKstText(d.createdAt) + ' KST'}"></div></div>
+  </div>
+
+  <div th:replace="~{fragments/ui :: jobBox}"></div>
+  <div id="jobInfo" th:if="${job != null and job.status.name() == 'RUNNING'}" th:data-job="${job.id}"></div>
+
+  <th:block th:if="${!quality.isEmpty()}">
+    <h2 class="section-title"><span data-term="inputCheck">입력 검사</span> <span class="count">거래쌍별</span></h2>
+    <div class="db-table-wrap">
+      <table class="db-table">
+        <thead><tr>
+          <th>거래쌍</th><th class="num">행 수</th><th>첫 봉 ~ 마지막 봉 (KST)</th><th class="num"><span data-term="fillRate">채움률</span></th>
+          <th class="num"><span data-term="gap">빈 1분</span></th><th class="num">빈 곳</th><th class="num">가장 긴 빈 곳</th>
+          <th class="num"><span data-term="segment">구간 수</span></th><th class="num">가장 긴 구간</th>
+          <th class="num"><span data-term="ohlcError">범위 오류</span></th><th class="num"><span data-term="zeroVolume">거래량 0</span></th><th class="num">미완료</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="q : ${quality}">
+          <td><b th:text="${q.assetCode}"></b> <span class="mono" th:text="${q.symbol}"></span></td>
+          <td class="num" th:text="${#numbers.formatInteger(q.rows, 1, 'COMMA')}"></td>
+          <td class="num small" th:text="${TU.toKstText(q.first) + ' ~ ' + TU.toKstText(q.last)}"></td>
+          <td class="num" th:text="${#numbers.formatPercent(q.fillRate(), 1, 2)}"></td>
+          <td class="num" th:text="${#numbers.formatInteger(q.missingMinutes, 1, 'COMMA') + '분'}"></td>
+          <td class="num" th:text="${q.gapCount}"></td>
+          <td class="num" th:text="${q.longestGapMinutes + '분'}"></td>
+          <td class="num" th:text="${q.segments}"></td>
+          <td class="num" th:text="${#numbers.formatInteger(q.longestSegment, 1, 'COMMA') + '행'}"></td>
+          <td class="num" th:text="${q.ohlcErrors}"></td>
+          <td class="num" th:text="${q.zeroVolume}"></td>
+          <td class="num" th:text="${q.incomplete}"></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div th:each="q : ${quality}" style="margin-top:14px">
+      <div class="callout callout-red" th:if="${!q.blockers.isEmpty()}">
+        <div class="callout-icon">⛔</div>
+        <div class="callout-body"><b th:text="${q.assetCode + ' — 생성 차단'}"></b> <span data-term="blocker"></span>
+          <div class="small" th:each="b : ${q.blockers}" th:text="${'· ' + b}"></div></div>
+      </div>
+      <div class="callout callout-yellow" th:if="${!q.warnings.isEmpty()}" style="margin-top:6px">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body"><b th:text="${q.assetCode + ' — 확인할 점'}"></b>
+          <div class="small" th:each="w : ${q.warnings}" th:text="${'· ' + w}"></div></div>
+      </div>
+      <div class="callout callout-green" th:if="${q.blockers.isEmpty() and q.warnings.isEmpty()}">
+        <div class="callout-icon">✅</div><div class="callout-body small"><b th:text="${q.assetCode}"></b> 빈 1분 · 범위 오류 없이 모든 1분봉이 이어져 있습니다.</div>
+      </div>
+      <details class="toggle" th:if="${!q.gaps.isEmpty()}" style="margin-top:6px">
+        <summary><span class="arrow">▶</span><span th:text="${q.assetCode + ' 빈 1분 목록 (긴 순 상위 ' + q.gaps.size() + '곳, 시간순)'}"></span></summary>
+        <div class="toggle-body">
+          <table class="db-table db-table--compact">
+            <thead><tr><th>시작 (KST)</th><th>끝 (KST, 제외)</th><th class="num">분</th></tr></thead>
+            <tbody><tr th:each="g : ${q.gaps}"><td class="num" th:text="${TU.toKstText(g.from)}"></td><td class="num" th:text="${TU.toKstText(g.to)}"></td><td class="num" th:text="${g.minutes}"></td></tr></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+    <div class="small muted" style="margin-top:10px">빈 1분은 채우지 않습니다. 지표는 빈 곳 앞뒤를 다른 구간으로 보고 다시 시작하고(앞부분 null), 정답의 관찰 구간이 빈 곳에 걸치면 「판정 불가」로 둡니다.</div>
+  </th:block>
+
+  <h2 class="section-title">이 원본으로 만든 지표 데이터셋 <span class="count" th:text="${children.size()}">0</span></h2>
+  <div class="db-table-wrap" th:if="${!children.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th class="num">고유 열</th><th>만든 시각 (KST)</th></tr></thead>
+      <tbody><tr th:each="f : ${children}">
+        <td class="num faint" th:text="${'#' + f.id}"></td>
+        <td><a class="row-title" th:href="@{/features/{id}(id=${f.id})}" th:text="${f.name}"></a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${f.status})}"></span></td>
+        <td class="num" th:text="${f.columnCount}"></td>
+        <td class="num" th:text="${TU.toKstText(f.createdAt)}"></td>
+      </tr></tbody>
+    </table>
+  </div>
+  <div class="small muted" th:if="${children.isEmpty()}">아직 없습니다.</div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script>
+    $(function () {
+      var $info = $('#jobInfo');
+      if ($info.length) App.watchJob($('#jobBox'), $info.data('job'), function () { window.location.reload(); });
+    });
+  </script>
+</th:block>
+</body>
+</html>

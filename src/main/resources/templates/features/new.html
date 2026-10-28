@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>기술 지표 만들기</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/features}">🧮 기술 지표</a><span class="sep">/</span><span class="crumb current">새로 만들기</span>
+</div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('🧮', '기술 지표 만들기', '저장된 원본 1분봉을 고르고 여섯 지표의 기간 · 옵션 · 변수 묶음을 한 페이지에서 정합니다. 1분봉 행은 그대로 두고 지표 열만 더해 새 버전으로 저장합니다.')}"></div>
+  <div th:replace="~{fragments/ui :: flow(2)}"></div>
+
+  <div class="empty" th:if="${raws.isEmpty()}">
+    <div class="empty-icon">📥</div>
+    <div>완료된 원본 데이터가 없습니다. 먼저 원본 1분봉을 받으세요.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/raw/new}">원본 받기 →</a>
+  </div>
+
+  <div id="featureForm" th:unless="${raws.isEmpty()}">
+    <!-- ============================================================ 1. 원본 -->
+    <h2 class="section-title" style="margin-top:0">1. 원본 데이터 선택 <span data-term="rawDataset"></span></h2>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">📥</span>원본</div>
+        <div class="prop-value">
+          <select class="form-select" id="rawSelect" style="min-width:320px">
+            <option th:each="r : ${raws}" th:value="${r.id}" th:selected="${r.id == selectedRaw}"
+                    th:text="${'#' + r.id + ' ' + r.name + ' (' + r.exchange.label + ')'}"></option>
+          </select>
+          <a class="btn btn-ghost btn-sm" id="rawLink" href="#">원본 상세 →</a>
+        </div>
+      </div>
+    </div>
+    <div id="rawInfo" style="margin-top:6px"></div>
+
+    <!-- ============================================================ 2. 지표 설정 -->
+    <h2 class="section-title">2. 기술 지표 설정
+      <span class="section-actions">
+        <select class="form-select form-select-sm" id="presetSelect" style="width:auto"><option value="">저장한 설정 불러오기…</option></select>
+        <button type="button" class="btn btn-ghost btn-sm" id="resetDefaults">예시값으로 되돌리기</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="openAll">모두 펼치기</button>
+      </span>
+    </h2>
+    <div class="help-body" style="margin-bottom:12px">
+      <p><b>기간 단위</b>는 완료된 1분봉 개수입니다 (20 = 최근 20분). <span data-term="period"></span>
+        숫자 칸에 값을 쓰고 Enter · 쉼표로 추가하고, × 로 지웁니다. 여러 개를 한 번에 넣을 수 있습니다 (예: <span class="mono">5 10 20 60</span>).</p>
+      <p>꺼진 지표는 열을 만들지 않지만 입력한 옵션은 그대로 남습니다. 묶음 이름에 마우스를 올리면 계산식과 읽는 법이 나옵니다. 처음 값은 노션 문서의 예시이며 확정된 기본값이 아닙니다.</p>
+    </div>
+
+    <!-- 거래량 -->
+    <div class="ind-card open" data-kind="VOLUME">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="volume.enabled"><span></span></label>
+        <span class="ind-name">📊 거래량</span><span data-term="ind_VOLUME"></span>
+        <span class="ind-sub">평균 · RVOL · VO · MFI · CMF · OBV</span>
+        <span class="ind-count tag" data-kind-count="VOLUME">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> 거래가 얼마나 활발했는지, 가격 움직임에 거래량이 실렸는지입니다. 거래량 단위는 BTC·ETH 개수(기준 자산 수량)입니다.</p>
+          <p><b>만드는 수:</b> 평균 · RVOL · MFI · CMF 는 기간마다 1개, VO 는 기간 쌍마다 1개, OBV 는 1개 → 4K + K(K−1)/2 + 1 (K = 기간 수)</p>
+        </div>
+        <div class="opt-row"><div class="opt-label"><span data-term="periodSet">기간 집합 S</span></div>
+          <div class="opt-value"><div class="numset" data-path="volume.periods" data-type="int"></div>
+            <div class="hint">평균 · RVOL · MFI · CMF 는 기간마다, VO 는 짧은·긴 기간 쌍마다 만듭니다. OBV 는 기간이 없습니다.</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_VOLUME_sma"><input type="checkbox" class="form-check-input" data-path="volume.sma">평균 거래량<span class="bcount" data-bundle="VOLUME:sma"></span></label>
+            <label class="bundle-item" data-hover-term="b_VOLUME_rvol"><input type="checkbox" class="form-check-input" data-path="volume.rvol">상대 거래량 (RVOL)<span class="bcount" data-bundle="VOLUME:rvol"></span></label>
+            <label class="bundle-item" data-hover-term="b_VOLUME_vo"><input type="checkbox" class="form-check-input" data-path="volume.vo">거래량 오실레이터 (VO)<span class="bcount" data-bundle="VOLUME:vo"></span></label>
+            <label class="bundle-item" data-hover-term="b_VOLUME_mfi"><input type="checkbox" class="form-check-input" data-path="volume.mfi">MFI<span class="bcount" data-bundle="VOLUME:mfi"></span></label>
+            <label class="bundle-item" data-hover-term="b_VOLUME_cmf"><input type="checkbox" class="form-check-input" data-path="volume.cmf">CMF<span class="bcount" data-bundle="VOLUME:cmf"></span></label>
+            <label class="bundle-item" data-hover-term="b_VOLUME_obv"><input type="checkbox" class="form-check-input" data-path="volume.obv">OBV<span class="bcount" data-bundle="VOLUME:obv"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- 이동평균선 -->
+    <div class="ind-card" data-kind="MA">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="ma.enabled"><span></span></label>
+        <span class="ind-name">📈 이동평균선</span><span data-term="ind_MA"></span>
+        <span class="ind-sub">SMA · EMA · WMA · VWMA</span>
+        <span class="ind-count tag" data-kind-count="MA">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> 최근 N개 종가의 평균선입니다. 가격이 평균 위 · 아래인지, 평균선이 오르는지, 짧은 선이 긴 선 위인지로 추세를 나타냅니다. 가격 입력은 종가입니다.</p>
+          <p><b>만드는 수:</b> 선 m = 종류 × 기간. 원값 m + 거리 m + 기울기 m×|L| + 두 선 쌍마다 간격 · 위치. 「이동평균선」을 다섯 번째 종류로 따로 만들지 않습니다.</p>
+        </div>
+        <div class="opt-row"><div class="opt-label">이동평균 종류</div>
+          <div class="opt-value chip-group">
+            <label class="chip" data-hover-term="ma_SMA"><input type="checkbox" data-list="ma.types" value="SMA">SMA<span class="chip-sub">단순</span></label>
+            <label class="chip" data-hover-term="ma_EMA"><input type="checkbox" data-list="ma.types" value="EMA">EMA<span class="chip-sub">지수</span></label>
+            <label class="chip" data-hover-term="ma_WMA"><input type="checkbox" data-list="ma.types" value="WMA">WMA<span class="chip-sub">선형 가중</span></label>
+            <label class="chip" data-hover-term="ma_VWMA"><input type="checkbox" data-list="ma.types" value="VWMA">VWMA<span class="chip-sub">거래량 가중</span></label>
+          </div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="periodSet">평균 기간 S</span></div>
+          <div class="opt-value"><div class="numset" data-path="ma.periods" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="lag">기울기 비교 간격 L</span></div>
+          <div class="opt-value"><div class="numset" data-path="ma.slopeLags" data-type="int"></div>
+            <div class="hint">평균선 현재 값을 L분 전 값과 비교합니다 (기울기 묶음에만 씀).</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="pairScope">두 선 비교 범위</span></div>
+          <div class="opt-value chip-group">
+            <label class="chip"><input type="radio" name="pairScope" data-path="ma.pairScope" value="SAME_TYPE">같은 종류 내 기간 쌍<span class="chip-sub">SMA 5 vs SMA 20</span></label>
+            <label class="chip"><input type="radio" name="pairScope" data-path="ma.pairScope" value="ALL">선택한 모든 선의 쌍<span class="chip-sub">SMA 5 vs EMA 20 도 포함</span></label>
+          </div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_MA_raw"><input type="checkbox" class="form-check-input" data-path="ma.raw">평균선 원값<span class="bcount" data-bundle="MA:raw"></span></label>
+            <label class="bundle-item" data-hover-term="b_MA_distance"><input type="checkbox" class="form-check-input" data-path="ma.distance">종가와 선의 거리<span class="bcount" data-bundle="MA:distance"></span></label>
+            <label class="bundle-item" data-hover-term="b_MA_slope"><input type="checkbox" class="form-check-input" data-path="ma.slope">선의 기울기<span class="bcount" data-bundle="MA:slope"></span></label>
+            <label class="bundle-item" data-hover-term="b_MA_gap"><input type="checkbox" class="form-check-input" data-path="ma.gap">두 선의 간격<span class="bcount" data-bundle="MA:gap"></span></label>
+            <label class="bundle-item" data-hover-term="b_MA_above"><input type="checkbox" class="form-check-input" data-path="ma.above">두 선의 위치<span class="bcount" data-bundle="MA:above"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- RSI -->
+    <div class="ind-card" data-kind="RSI">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="rsi.enabled"><span></span></label>
+        <span class="ind-name">📉 RSI</span><span data-term="ind_RSI"></span>
+        <span class="ind-sub">원값 · 변화 · 두 기간 비교 · 구간 상태 · StochRSI</span>
+        <span class="ind-count tag" data-kind-count="RSI">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> 최근 상승폭과 하락폭의 비율을 0~100 으로 나타냅니다 (와일더 평활). 높을수록 최근 상승이 우세했습니다.</p>
+          <p><b>주의:</b> 30 · 70 은 전통 참고값이고 1분봉에서 반전 신호로 확정된 값이 아닙니다. 기준값 쌍은 RSI 기간과 따로 입력합니다.</p>
+        </div>
+        <div class="opt-row"><div class="opt-label"><span data-term="periodSet">RSI 기간 S</span></div>
+          <div class="opt-value"><div class="numset" data-path="rsi.periods" data-type="int"></div>
+            <div class="hint">기간 N 의 첫 값은 종가 N+1개가 모여야 나옵니다.</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="lag">변화량 비교 간격 L</span></div>
+          <div class="opt-value"><div class="numset" data-path="rsi.deltaLags" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="band">하단 · 상단 기준값</span></div>
+          <div class="opt-value">
+            <span class="numset-chips" id="bandChips"></span>
+            <input type="number" class="form-control form-control-sm" id="bandLower" placeholder="하단" style="width:80px" min="0" max="100" step="any">
+            <input type="number" class="form-control form-control-sm" id="bandUpper" placeholder="상단" style="width:80px" min="0" max="100" step="any">
+            <button type="button" class="btn btn-outline btn-sm" id="bandAdd">＋ 쌍 추가</button>
+            <div class="hint">0 ≤ 하단 &lt; 상단 ≤ 100. 쌍마다 기간 수 × 2개 열 (하단 미만 · 상단 초과). 「구간 상태」 묶음에만 씁니다.</div>
+          </div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="stochRange">StochRSI 범위 기간 R</span></div>
+          <div class="opt-value"><div class="numset" data-path="rsi.stochRanges" data-type="int" data-min="2"></div>
+            <div class="hint">StochRSI 묶음을 켰을 때만 씁니다. RSI 기간 × R 의 모든 조합을 만듭니다.</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_RSI_raw"><input type="checkbox" class="form-check-input" data-path="rsi.raw">RSI 원값<span class="bcount" data-bundle="RSI:raw"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_center"><input type="checkbox" class="form-check-input" data-path="rsi.center">50과의 거리<span class="bcount" data-bundle="RSI:center"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_delta"><input type="checkbox" class="form-check-input" data-path="rsi.delta">RSI 변화량<span class="bcount" data-bundle="RSI:delta"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_pairGap"><input type="checkbox" class="form-check-input" data-path="rsi.pairGap">두 기간 RSI 차이<span class="bcount" data-bundle="RSI:pairGap"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_pairAbove"><input type="checkbox" class="form-check-input" data-path="rsi.pairAbove">두 기간 RSI 위치<span class="bcount" data-bundle="RSI:pairAbove"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_zones"><input type="checkbox" class="form-check-input" data-path="rsi.zones">하단·상단 구간 상태<span class="bcount" data-bundle="RSI:zones"></span></label>
+            <label class="bundle-item" data-hover-term="b_RSI_stoch"><input type="checkbox" class="form-check-input" data-path="rsi.stoch">StochRSI<span class="bcount" data-bundle="RSI:stoch"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- MACD -->
+    <div class="ind-card" data-kind="MACD">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="macd.enabled"><span></span></label>
+        <span class="ind-name">📊 MACD</span><span data-term="ind_MACD"></span>
+        <span class="ind-sub">빠른 · 느린 · 신호 EMA 조합</span>
+        <span class="ind-count tag" data-kind-count="MACD">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> MACD 선 = 빠른 EMA − 느린 EMA, 신호선 = MACD 의 EMA, 히스토그램 = MACD − 신호선. 추세의 방향과 가속을 봅니다. 평균은 모두 EMA 입니다.</p>
+          <p><b>만드는 수:</b> 빠른 &lt; 느린인 (f, s) 쌍 × 신호 기간 수 = 설정 C 개. 설정마다 기본 3 + 비율 3 + 변화량 3×|L| + 위치 2 + 교차 4. MACD 선 계열은 신호 기간과 무관해 반복분은 하나만 저장합니다.</p>
+        </div>
+        <div class="opt-row"><div class="opt-label"><span data-term="macdFast">빠른 EMA 기간 F</span></div>
+          <div class="opt-value"><div class="numset" data-path="macd.fast" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="macdSlow">느린 EMA 기간 S</span></div>
+          <div class="opt-value"><div class="numset" data-path="macd.slow" data-type="int"></div>
+            <div class="hint">빠른 기간보다 큰 값과만 짝지어집니다. 짝이 안 되는 조합은 만들지 않고 아래에 이유를 보여줍니다.</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="macdSignal">신호 EMA 기간 G</span></div>
+          <div class="opt-value"><div class="numset" data-path="macd.signal" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="lag">변화량 비교 간격 L</span></div>
+          <div class="opt-value"><div class="numset" data-path="macd.deltaLags" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_MACD_base"><input type="checkbox" class="form-check-input" data-path="macd.base">MACD·신호선·히스토그램<span class="bcount" data-bundle="MACD:base"></span></label>
+            <label class="bundle-item" data-hover-term="b_MACD_pct"><input type="checkbox" class="form-check-input" data-path="macd.pct">가격 대비 비율<span class="bcount" data-bundle="MACD:pct"></span></label>
+            <label class="bundle-item" data-hover-term="b_MACD_delta"><input type="checkbox" class="form-check-input" data-path="macd.delta">세 값의 변화량<span class="bcount" data-bundle="MACD:delta"></span></label>
+            <label class="bundle-item" data-hover-term="b_MACD_position"><input type="checkbox" class="form-check-input" data-path="macd.position">0선·신호선 위치<span class="bcount" data-bundle="MACD:position"></span></label>
+            <label class="bundle-item" data-hover-term="b_MACD_cross"><input type="checkbox" class="form-check-input" data-path="macd.cross">0선 교차 이벤트<span class="bcount" data-bundle="MACD:cross"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- ATR -->
+    <div class="ind-card" data-kind="ATR">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="atr.enabled"><span></span></label>
+        <span class="ind-name">📏 ATR</span><span data-term="ind_ATR"></span>
+        <span class="ind-sub">변동 폭 (방향 없음)</span>
+        <span class="ind-count tag" data-kind-count="ATR">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> 최근 1분봉이 평균적으로 얼마나 크게 움직였는지입니다. TR 은 직전 종가와의 차이까지 반영한 1분 변동 폭, ATR 은 그 와일더 평균입니다. 방향은 알려주지 않습니다.</p>
+          <p><b>만드는 수:</b> 1 + 3K + K×|L| + K(K−1) (TR 1 · 원값 · 가격 대비 · TR/ATR · 변화량 · 두 기간 비율 · 위치)</p>
+        </div>
+        <div class="opt-row"><div class="opt-label"><span data-term="periodSet">ATR 기간 S</span></div>
+          <div class="opt-value"><div class="numset" data-path="atr.periods" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="lag">변화량 비교 간격 L</span></div>
+          <div class="opt-value"><div class="numset" data-path="atr.deltaLags" data-type="int"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_ATR_tr"><input type="checkbox" class="form-check-input" data-path="atr.tr">TR 원값<span class="bcount" data-bundle="ATR:tr"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_atr"><input type="checkbox" class="form-check-input" data-path="atr.atr">ATR 원값<span class="bcount" data-bundle="ATR:atr"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_atrPct"><input type="checkbox" class="form-check-input" data-path="atr.atrPct">가격 대비 ATR<span class="bcount" data-bundle="ATR:atrPct"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_trToAtr"><input type="checkbox" class="form-check-input" data-path="atr.trToAtr">현재 TR / ATR<span class="bcount" data-bundle="ATR:trToAtr"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_delta"><input type="checkbox" class="form-check-input" data-path="atr.delta">ATR 변화량<span class="bcount" data-bundle="ATR:delta"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_pairRatio"><input type="checkbox" class="form-check-input" data-path="atr.pairRatio">두 기간 ATR 비율<span class="bcount" data-bundle="ATR:pairRatio"></span></label>
+            <label class="bundle-item" data-hover-term="b_ATR_pairAbove"><input type="checkbox" class="form-check-input" data-path="atr.pairAbove">두 기간 ATR 위치<span class="bcount" data-bundle="ATR:pairAbove"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- 볼린저 밴드 -->
+    <div class="ind-card" data-kind="BB">
+      <div class="ind-head">
+        <span class="arrow">▶</span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-path="bb.enabled"><span></span></label>
+        <span class="ind-name">📈 볼린저 밴드</span><span data-term="ind_BB"></span>
+        <span class="ind-sub">가운데 SMA ± K × 표준편차</span>
+        <span class="ind-count tag" data-kind-count="BB">0열</span>
+      </div>
+      <div class="ind-body">
+        <div class="ind-explain">
+          <p><b>무엇:</b> 가격이 최근 범위(가운데선 ± 표준편차의 K배)의 어디에 있는지, 그 범위가 얼마나 넓은지입니다. 표준편차는 모집단 표준편차(ddof = 0)입니다.</p>
+          <p><b>만드는 수:</b> 3P + 6PQ (P = 기간 수, Q = 배수 수). 가운데선은 같은 기간 SMA 와 같은 값이라 이동평균선에서 이미 만들면 하나만 둡니다.</p>
+        </div>
+        <div class="opt-row"><div class="opt-label"><span data-term="periodSet">평균·표준편차 기간 N</span></div>
+          <div class="opt-value"><div class="numset" data-path="bb.periods" data-type="int" data-min="2"></div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bbMultiplier">표준편차 배수 K</span></div>
+          <div class="opt-value"><div class="numset" data-path="bb.multipliers" data-type="float"></div>
+            <div class="hint">0보다 큰 수 (예: 1.5, 2). 열 이름에서 소수점은 p 로 씁니다 (1.5 → 1p5).</div></div></div>
+        <div class="opt-row"><div class="opt-label"><span data-term="bundle">변수 묶음</span></div>
+          <div class="opt-value bundle-list">
+            <label class="bundle-item" data-hover-term="b_BB_mid"><input type="checkbox" class="form-check-input" data-path="bb.mid">가운데선 (SMA)<span class="bcount" data-bundle="BB:mid"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_std"><input type="checkbox" class="form-check-input" data-path="bb.std">표준편차<span class="bcount" data-bundle="BB:std"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_z"><input type="checkbox" class="form-check-input" data-path="bb.z">z값<span class="bcount" data-bundle="BB:z"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_bands"><input type="checkbox" class="form-check-input" data-path="bb.bands">상단·하단 밴드<span class="bcount" data-bundle="BB:bands"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_width"><input type="checkbox" class="form-check-input" data-path="bb.width">밴드 폭<span class="bcount" data-bundle="BB:width"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_percentB"><input type="checkbox" class="form-check-input" data-path="bb.percentB">%B<span class="bcount" data-bundle="BB:percentB"></span></label>
+            <label class="bundle-item" data-hover-term="b_BB_flags"><input type="checkbox" class="form-check-input" data-path="bb.flags">상단 초과·하단 미만<span class="bcount" data-bundle="BB:flags"></span></label>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- ============================================================ 3. 미리보기 -->
+    <h2 class="section-title">3. 생성 미리보기 <span class="count" id="previewState"></span></h2>
+    <div class="help-body" style="margin-bottom:10px">
+      <p>설정을 바꿀 때마다 다시 계산합니다. 여기서는 열의 <b>정의</b>(이름 · 계산식 · 필요한 과거 이력)를 보여주고, 행별 실제 값과 null 수는 만든 뒤 상세 화면에서 봅니다.</p>
+    </div>
+    <ul class="msg-list" id="messages"></ul>
+    <div class="cards" id="kindCards"></div>
+    <div id="historyBox" style="margin-top:10px"></div>
+    <div id="dupBox" style="margin-top:10px"></div>
+
+    <h3 class="section-title" style="font-size:15px">전체 열 목록 <span class="count" id="colCount"></span>
+      <span class="section-actions">
+        <select class="form-select form-select-sm" id="colKind" style="width:auto"><option value="">모든 지표</option>
+          <option th:each="k : ${kinds}" th:value="${k.name()}" th:text="${k.label}"></option></select>
+        <input type="search" class="form-control form-control-sm" id="colSearch" placeholder="열 이름 · 설명 검색" style="width:200px">
+      </span>
+    </h3>
+    <div class="scroll-box">
+      <table class="db-table db-table--compact col-table">
+        <thead><tr><th>#</th><th>열 이름</th><th>설명</th><th>지표</th><th>설정</th><th class="num"><span data-term="warmup">워밍업</span></th><th>계산식</th></tr></thead>
+        <tbody id="colBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ============================================================ 4. 저장 · 생성 -->
+    <h2 class="section-title">4. 저장 · 생성</h2>
+    <div class="props">
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🏷️</span>지표 데이터셋 이름</div>
+        <div class="prop-value"><input type="text" class="form-control grow" id="name" maxlength="100" th:value="${initialName}"></div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">💾</span><span data-term="preset">설정만 저장</span></div>
+        <div class="prop-value">
+          <input type="text" class="form-control" id="presetName" maxlength="100" placeholder="설정 이름 (예: 기본 4기간)" style="width:240px">
+          <button type="button" class="btn btn-outline btn-sm" id="savePreset">설정 저장</button>
+          <div class="hint">데이터 없이 지금 설정만 저장합니다. 다른 원본에 같은 설정을 쓸 때 위의 「저장한 설정 불러오기」로 불러옵니다.</div>
+        </div>
+      </div>
+      <div class="prop">
+        <div class="prop-label"><span class="prop-icon">🧾</span><span data-term="codeVersion">계산 코드 버전</span></div>
+        <div class="prop-value mono" th:text="${codeVersion}"></div>
+      </div>
+    </div>
+
+    <div class="sticky-summary" id="stickySummary">
+      <span>고유 열 <b id="sumUnique">-</b> <span data-term="uniqueCount"></span></span>
+      <span class="muted">중복 제거 전 <span id="sumPlanned">-</span> <span data-term="plannedCount"></span></span>
+      <span class="muted">최대 워밍업 <span id="sumWarmup">-</span>분</span>
+      <span id="sumProblem" class="small"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-primary" id="createBtn">지표 데이터셋 만들기</button>
+    </div>
+
+    <div th:replace="~{fragments/ui :: jobBox}"></div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var FEATURE_INIT = {
+      config: JSON.parse(/*[[${configJson}]]*/ '{}'),
+      defaults: JSON.parse(/*[[${defaultsJson}]]*/ '{}'),
+      rawQuality: JSON.parse(/*[[${rawQualityJson}]]*/ '{}'),
+      marketLabels: /*[[${marketLabels}]]*/ {}
+    };
+  </script>
+  <script th:src="@{/js/feature-new.js}"></script>
+</th:block>
+</body>
+</html>

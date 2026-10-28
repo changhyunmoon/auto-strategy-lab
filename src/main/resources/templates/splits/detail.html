@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${p.name}">분할</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/splits}">✂️ 학습·검증·테스트 분할</a><span class="sep">/</span><span class="crumb current" th:text="${'#' + p.id + ' ' + p.name}">분할</span>
+</div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">✂️</div>
+      <h1 class="page-title" th:text="${p.name}">분할</h1>
+      <div class="page-desc"><span data-term="splitPlan">분할 계획</span> <span th:text="${'#' + p.id}"></span>
+        <th:block th:if="${p.description != null}"> · <span th:text="${p.description}"></span></th:block></div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-outline" th:href="@{/splits/new(copy=${p.id})}">날짜 바꿔 새 버전</a>
+      <button type="button" class="btn btn-danger-ghost" th:data-delete-url="@{/api/splits/{id}(id=${p.id})}" th:data-after="@{/splits}"
+              data-delete-confirm="분할 계획과 소속 파일을 지울까요? 정답 · 지표 · 원본은 남습니다.">지우기</button>
+    </div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(4)}"></div>
+
+  <h2 class="section-title" style="margin-top:0"><span data-term="reproduce">재현 경로</span></h2>
+  <div class="chain">
+    <a class="node" th:href="@{/raw/{id}(id=${raw.id})}"><b th:text="${'원본 #' + raw.id}"></b> <span th:text="${raw.name}"></span>
+      <span class="faint" th:text="${' · ' + raw.exchange.label + ' · UTC ' + TU.utcDate(raw.rangeFrom) + '~' + TU.utcLastDate(raw.rangeTo)}"></span></a>
+    <span class="arr">→</span>
+    <a class="node" th:href="@{/features/{id}(id=${f.id})}"><b th:text="${'지표 #' + f.id}"></b> <span th:text="${f.columnCount + '열'}"></span> <span class="faint mono" th:text="${f.codeVersion}"></span></a>
+    <span class="arr">→</span>
+    <a class="node" th:href="@{/labels/{id}(id=${l.id})}"><b th:text="${'정답 #' + l.id}"></b> <span th:text="${'H' + lc.horizon + ' · P' + lc.targetPct + ' · L' + lc.stopPct}"></span> <span class="faint mono" th:text="${l.codeVersion}"></span></a>
+    <span class="arr">→</span>
+    <span class="node"><b th:text="${'분할 #' + p.id}"></b> <span class="faint mono" th:text="${p.codeVersion}"></span></span>
+    <span class="arr">→</span>
+    <span class="node faint"><span data-term="modelNext">모델 학습 · 평가 (후속 설계)</span></span>
+  </div>
+
+  <div class="props" style="margin-top:14px">
+    <div class="prop"><div class="prop-label">상태</div><div class="prop-value"><span th:replace="~{fragments/ui :: statusTag(${p.status})}"></span>
+      <span class="small muted" th:if="${p.message != null}" th:text="${p.message}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="useRange">사용 기간</span></div><div class="prop-value num"
+      th:text="${(c.useFrom != null ? c.useFrom : '원본 처음') + ' ~ ' + (c.useTo != null ? c.useTo : '원본 끝')}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="trainSplit">학습</span></div><div class="prop-value num" th:text="${c.trainFrom + ' ~ ' + c.trainTo}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="valSplit">검증</span></div><div class="prop-value num" th:text="${c.valFrom + ' ~ ' + c.valTo}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="testSplit">최종 테스트</span></div><div class="prop-value num" th:text="${c.testFrom + ' ~ ' + c.testTo}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="embargo">경계 여유</span></div><div class="prop-value num" th:text="${c.embargoMinutes + '분'}"></div></div>
+    <div class="prop"><div class="prop-label">만든 시각</div><div class="prop-value num" th:text="${TU.toKstText(p.createdAt) + ' KST'}"></div></div>
+  </div>
+
+  <div style="margin-top:14px">
+    <div class="timeline" id="timeline"></div>
+    <div class="timeline-legend"><span id="tlFrom"></span><span id="tlTo"></span></div>
+  </div>
+
+  <h2 class="section-title">구간별 행 수 · 제외 사유 · 정답 분포</h2>
+  <div id="summaryBox"></div>
+
+  <h2 class="section-title"><span data-term="testReveal">최종 테스트 정답 분포</span></h2>
+  <div class="lock-box" id="testBox">
+    <div>🔒 최종 테스트 구간의 정답 분포는 설정을 고르는 동안 보지 않도록 숨겨 두었습니다.
+      H·P·L · 지표 · 모델 선택을 모두 끝낸 뒤에 여세요. 여는 횟수와 시각이 기록됩니다.</div>
+    <div class="small" style="margin-top:6px">지금까지 연 횟수: <b id="testViews" th:text="${p.testViews}">0</b>
+      <th:block th:if="${!testViewLog.isEmpty()}"> · 마지막 <span th:text="${TU.toKstText(testViewLog.get(testViewLog.size() - 1)) + ' KST'}"></span></th:block></div>
+    <button type="button" class="btn btn-outline btn-sm" id="revealBtn" style="margin-top:8px" th:disabled="${p.status.name() != 'READY'}">최종 테스트 분포 열기 (기록됨)</button>
+  </div>
+
+  <h2 class="section-title">다음 단계</h2>
+  <div class="callout">
+    <div class="callout-icon">🧠</div>
+    <div class="callout-body small">
+      <b>모델 학습 · 평가는 후속 설계입니다.</b> 이 분할 계획을 입력으로 학습 구간에서 모델과 전처리 기준(결측 채우기 · 표준화 등)을 만들고, 검증 구간에서 지표 · 정답 · 모델 설정을 비교한 뒤, 선택을 고정하고 최종 테스트를 평가하게 됩니다.
+      X 에는 판단 시각까지의 원본 · 지표만 넣고, 정답 · label_end_time · 도달 시각 · 미래 수익률은 넣지 않습니다. <span data-term="leakage"></span> <span data-term="walkForward"></span>
+    </div>
+  </div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var SPLIT = {
+      id: /*[[${p.id}]]*/ 0,
+      summary: JSON.parse(/*[[${summaryJson}]]*/ 'null'),
+      dataFrom: /*[[${raw.rangeFrom.toString()}]]*/ '',
+      dataTo: /*[[${raw.rangeTo.toString()}]]*/ '',
+      config: { trainFrom: /*[[${c.trainFrom?.toString()}]]*/ null, trainTo: /*[[${c.trainTo?.toString()}]]*/ null,
+        valFrom: /*[[${c.valFrom?.toString()}]]*/ null, valTo: /*[[${c.valTo?.toString()}]]*/ null,
+        testFrom: /*[[${c.testFrom?.toString()}]]*/ null, testTo: /*[[${c.testTo?.toString()}]]*/ null }
+    };
+  </script>
+  <script th:src="@{/js/label-common.js}"></script>
+  <script th:src="@{/js/split-common.js}"></script>
+  <script>
+    $(function () {
+      SplitView.timeline($('#timeline'), $('#tlFrom'), $('#tlTo'), SPLIT.dataFrom, SPLIT.dataTo, SPLIT.config);
+      SplitView.render($('#summaryBox'), SPLIT.summary, null);
+      $('#revealBtn').on('click', function () {
+        if (!window.confirm('최종 테스트 정답 분포를 열까요?\n여는 횟수와 시각이 기록됩니다. 연 뒤 결과에 맞춰 설정을 바꾸면 이 기간은 더 이상 「처음 보는 데이터」가 아닙니다.')) return;
+        App.api('POST', '/api/splits/' + SPLIT.id + '/reveal-test').done(function (res) {
+          var test = {};
+          res.markets.forEach(function (m) { test[m.marketId] = m.labels; });
+          SplitView.render($('#summaryBox'), SPLIT.summary, test);
+          $('#testViews').text(res.views);
+          $('#testBox').removeClass('lock-box').addClass('callout callout-red').find('div:first').text('🔓 최종 테스트 정답 분포를 열었습니다 (위 표의 최종 테스트 행). 이 결과로 설정을 바꾸지 마세요.');
+          $('#revealBtn').remove();
+        });
+      });
+    });
+  </script>
+</th:block>
+</body>
+</html>

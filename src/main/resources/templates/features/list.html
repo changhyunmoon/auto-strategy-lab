@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>기술 지표</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🧮 기술 지표</span></div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🧮</div>
+      <h1 class="page-title">기술 지표</h1>
+      <div class="page-desc">원본 1분봉 행에 거래량 · 이동평균선 · RSI · MACD · ATR · 볼린저 밴드 열을 더한 <span data-term="featureSet">파생 데이터셋</span>입니다. 옵션을 바꿔 다시 만들면 새 버전이 생깁니다.</div>
+    </div>
+    <div class="page-head-actions"><a class="btn btn-primary" th:href="@{/features/new}">＋ 지표 만들기</a></div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(2)}"></div>
+
+  <div class="db-table-wrap" th:if="${!features.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th>원본</th><th class="num"><span data-term="uniqueCount">지표 열</span></th>
+        <th class="num">행 수</th><th><span data-term="codeVersion">코드</span></th><th class="num">정답</th><th>만든 시각 (KST)</th><th></th></tr></thead>
+      <tbody>
+      <tr th:each="f : ${features}">
+        <td class="num faint" th:text="${'#' + f.id}"></td>
+        <td><a class="row-title" th:href="@{/features/{id}(id=${f.id})}" th:text="${f.name}"></a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${f.status})}"></span></td>
+        <td><a class="link small" th:href="@{/raw/{id}(id=${f.rawDatasetId})}" th:text="${'#' + f.rawDatasetId + ' ' + rawNames.getOrDefault(f.rawDatasetId, '(지워짐)')}"></a></td>
+        <td class="num" th:text="${f.columnCount}"></td>
+        <td class="num" th:text="${#numbers.formatInteger(f.rowCount, 1, 'COMMA')}"></td>
+        <td class="mono small" th:text="${f.codeVersion}"></td>
+        <td class="num" th:text="${labelCounts.get(f.id)}"></td>
+        <td class="num" th:text="${TU.toKstText(f.createdAt)}"></td>
+        <td><a class="btn btn-ghost btn-sm" th:if="${f.status.name() == 'READY'}" th:href="@{/labels/new(featureSetId=${f.id})}">정답 만들기 →</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty" th:if="${features.isEmpty()}">
+    <div class="empty-icon">🧮</div>
+    <div>아직 만든 지표 데이터셋이 없습니다.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/features/new}">＋ 지표 만들기</a>
+  </div>
+</div>
+</body>
+</html>

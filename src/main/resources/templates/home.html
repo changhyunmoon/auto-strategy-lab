@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>전체 흐름</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🧭 전체 흐름</span></div>
+
+<div layout:fragment="content" class="page">
+  <div th:replace="~{fragments/ui :: pageHead('🧭', '자동 전략 탐색 V2', 'BTC·ETH 완료 1분봉에서 기술 지표 후보를 만들고, 「정해진 시간 안에 수익 기회가 생기는지」를 정답으로 정의한 뒤, 시간순으로 학습·검증·최종 테스트를 나눕니다.')}"></div>
+
+  <div class="callout callout-blue">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <div><b>지금 V2 의 범위는 「데이터 제작」입니다.</b> 원본 → 입력 변수 → 정답 → 분할까지를 만들고, 모델 학습·평가는 노션에서 후속 설계로 남아 있습니다.</div>
+      <div class="small muted" style="margin-top:4px">각 단계의 결과는 덮어쓰지 않고 새 버전(#번호)으로 쌓입니다. 분할 계획 하나에서 원본 · 지표 설정 · 정답 정의 · 코드 버전을 거슬러 올라가면 같은 학습 데이터를 다시 만들 수 있습니다.
+        <span data-term="v2Flow">흐름 설명</span></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">단계</h2>
+  <div class="flow">
+    <a class="flow-step" th:href="@{/raw}">
+      <span class="no">① 원본 데이터 확보·보존</span>
+      <span class="name">📥 원본 1분봉</span>
+      <span class="desc">거래소에서 BTC·ETH 완료 1분봉(시가·고가·저가·종가·거래량)을 받고, 빈 1분 · 범위 오류 같은 입력 품질을 기록합니다.</span>
+      <span class="cnt" th:text="${'원본 ' + raws.size() + '개'}">원본 0개</span>
+    </a>
+    <a class="flow-step" th:href="@{/features}">
+      <span class="no">② 입력 변수</span>
+      <span class="name">🧮 기술 지표</span>
+      <span class="desc">1분봉 행을 그대로 두고 거래량 · 이동평균선 · RSI · MACD · ATR · 볼린저 밴드 열을 여러 기간으로 더합니다. 5분봉으로 묶지 않습니다.</span>
+      <span class="cnt" th:text="${'지표 데이터셋 ' + features.size() + '개'}">0개</span>
+    </a>
+    <a class="flow-step" th:href="@{/labels}">
+      <span class="no">③ 정답 (y)</span>
+      <span class="name">🎯 H·P·L 정답</span>
+      <span class="desc">판단 뒤 최대 H분 동안 목표 수익 P 와 허용 손실 L 중 무엇이 먼저 일어나는지 기록합니다. 시간 만료 · 판정 불가도 따로 구분합니다.</span>
+      <span class="cnt" th:text="${'정답 ' + labels.size() + '개'}">0개</span>
+    </a>
+    <a class="flow-step" th:href="@{/splits}">
+      <span class="no">④ 시간순 분할</span>
+      <span class="name">✂️ 학습·검증·테스트</span>
+      <span class="desc">세 구간의 날짜를 직접 정합니다. 정답이 자기 구간 밖 미래 가격을 본 행(label_end_time 경계 초과)은 뺍니다.</span>
+      <span class="cnt" th:text="${'분할 계획 ' + splits.size() + '개'}">0개</span>
+    </a>
+    <div class="flow-step later">
+      <span class="no">⑤ 후속 설계</span>
+      <span class="name">🧠 모델 학습·평가</span>
+      <span class="desc">학습 구간으로 모델 · 전처리를 만들고 검증으로 고른 뒤, 마지막에 최종 테스트를 평가합니다. 화면 · 모델 목록은 아직 설계 전입니다.</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">확정한 범위 <span class="count">노션 V2 기준</span></h2>
+  <div class="db-table-wrap">
+    <table class="db-table">
+      <tbody>
+      <tr><td style="width:170px" class="muted">대상 자산</td><td>BTC, ETH</td></tr>
+      <tr><td class="muted"><span data-term="completedBar">행 단위</span></td><td>완료된 1분봉 1개 = 1행. 상위 봉으로 재집계하지 않음</td></tr>
+      <tr><td class="muted"><span data-term="ohlcv">원본 기본 열</span></td><td>시각 · open · high · low · close · volume (거래대금은 있으면 원본으로 보존)</td></tr>
+      <tr><td class="muted">지표 종류</td><td>거래량, 이동평균선(SMA·EMA·WMA·VWMA), RSI, MACD, ATR, 볼린저 밴드 — 종류별 기간 복수 선택</td></tr>
+      <tr><td class="muted"><span data-term="labelSet">정답의 목적</span></td><td>미래 종가의 단순 방향보다, 정해진 시간 안의 수익 기회 발생 여부</td></tr>
+      <tr><td class="muted">분할</td><td>학습 · 검증 · 최종 테스트를 시간순으로 나누고 날짜를 직접 선택. BTC·ETH 에 같은 경계 적용</td></tr>
+      <tr><td class="muted"><span data-term="leakage">미래 정보 보호</span></td><td>입력 X 는 판단 시점까지의 데이터만. 정답 계산의 미래 결과는 X 에서 제외. <code>label_end_time</code> 으로 분할 경계 검사</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="section-title">아직 정하지 않은 것</h2>
+  <div class="callout callout-yellow">
+    <div class="callout-icon">🚧</div>
+    <div class="callout-body small">
+      <div>· 거래소 · 거래 통화 · 현물/파생, 매수 방향만 먼저 다룰지</div>
+      <div>· 실제 진입 가격 · 주문 시점, 비용 · 체결 가정, 같은 1분봉에서 P 와 L 에 모두 닿았을 때의 판정</div>
+      <div>· H 의 정확한 시작 · 끝 경계와 시간 만료 상태의 학습용 처리</div>
+      <div>· 각 구간의 실제 날짜 · 길이, 워크포워드 반복 검증을 추가할 시점</div>
+      <div>· 지표 후보 선별 방식, 모델 종류, 예측을 주문으로 바꾸는 규칙</div>
+      <div class="muted" style="margin-top:6px">화면의 예시값 · 기본 선택은 시작값일 뿐 고정 정책이 아닙니다. 정하지 않은 항목은 화면에서 직접 고르고, 고른 값은 결과와 함께 버전으로 저장됩니다.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title th:text="${l.name}">정답</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar">
+  <a class="crumb" th:href="@{/labels}">🎯 정답 (H·P·L)</a><span class="sep">/</span><span class="crumb current" th:text="${'#' + l.id + ' ' + l.name}">정답</span>
+</div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🎯</div>
+      <h1 class="page-title" th:text="${l.name}">정답</h1>
+      <div class="page-desc"><span data-term="labelSet">H·P·L 정답</span> <span th:text="${'#' + l.id}"></span>
+        <th:block th:if="${l.description != null}"> · <span th:text="${l.description}"></span></th:block></div>
+    </div>
+    <div class="page-head-actions">
+      <a class="btn btn-primary" th:if="${l.status.name() == 'READY'}" th:href="@{/splits/new(labelSetId=${l.id})}">이 정답으로 분할 만들기 →</a>
+      <a class="btn btn-outline" th:href="@{/labels/new(copy=${l.id})}">설정 복제해 새 버전</a>
+      <button type="button" class="btn btn-danger-ghost" th:data-delete-url="@{/api/labels/{id}(id=${l.id})}" th:data-after="@{/labels}"
+              data-delete-confirm="정답 데이터셋과 정답 파일을 지울까요? 지표 데이터셋은 남습니다.">지우기</button>
+    </div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(3)}"></div>
+
+  <div class="props">
+    <div class="prop"><div class="prop-label">상태</div><div class="prop-value"><span th:replace="~{fragments/ui :: statusTag(${l.status})}"></span>
+      <span class="small muted" th:if="${l.message != null}" th:text="${l.message}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="featureSet">지표 데이터셋</span></div><div class="prop-value">
+      <a class="link" th:href="@{/features/{id}(id=${f.id})}" th:text="${'#' + f.id + ' ' + f.name}"></a>
+      <span class="muted">←</span><a class="link small" th:href="@{/raw/{id}(id=${raw.id})}" th:text="${'원본 #' + raw.id + ' ' + raw.name}"></a></div></div>
+    <div class="prop"><div class="prop-label">H · P · L</div><div class="prop-value">
+      <span class="tag tag-blue" data-hover-term="horizonH" th:text="${'H ' + c.horizon + '분'}"></span>
+      <span class="tag tag-red" data-hover-term="targetP" th:text="${'P ' + c.targetPct + '%'}"></span>
+      <span class="tag tag-blue" data-hover-term="stopL" th:text="${'L ' + c.stopPct + '%'}"></span></div></div>
+    <div class="prop"><div class="prop-label">판정 규칙</div><div class="prop-value small">
+      <span data-term="direction" th:text="${c.isLong() ? '매수 후 매도 (long)' : '하락 수익 방향 (short)'}"></span><span class="muted">·</span>
+      <span data-term="entryRule" th:text="${c.entryNextOpen() ? '다음 1분봉 시가 진입' : '판단 봉 종가 진입'}"></span><span class="muted">·</span>
+      <span data-term="sameBar" th:text="${c.stopFirst() ? '동시 도달 = 손실 먼저' : '동시 도달 = 판정 불가'}"></span><span class="muted">·</span>
+      <span data-term="cost" th:text="${c.costEnabled ? '비용 반영 (수수료 ' + c.feePct + '% · 슬리피지 ' + c.slippagePct + '%, 왕복 ' + c.roundTripCostPct() + '%)' : '비용 미반영 (가격 경로만)'}"></span></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="exploreTo">탐색 기간 끝</span></div><div class="prop-value num"
+      th:text="${'UTC ' + TU.toUtcText(l.exploreTo) + ' (이후 정답 분포 숨김)'}"></div></div>
+    <div class="prop"><div class="prop-label"><span data-term="codeVersion">계산 코드 버전</span></div><div class="prop-value mono" th:text="${l.codeVersion}"></div></div>
+    <div class="prop"><div class="prop-label">행 수</div><div class="prop-value num" th:text="${#numbers.formatInteger(l.rowCount, 1, 'COMMA') + '행 (거래쌍 합, 모든 1분봉)'}"></div></div>
+    <div class="prop"><div class="prop-label">만든 시각</div><div class="prop-value num" th:text="${TU.toKstText(l.createdAt) + ' KST'}"></div></div>
+  </div>
+
+  <div th:replace="~{fragments/ui :: jobBox}"></div>
+  <div id="jobInfo" th:if="${job != null and job.status.name() == 'RUNNING'}" th:data-job="${job.id}"></div>
+
+  <h2 class="section-title">정답 분포</h2>
+  <div class="small muted">모델 학습 단계에서는 정답 상태만 y 로 쓰고, 진입가 · 도달 시각 · 만료 수익률 같은 보조 결과는 X 에 넣지 않습니다. <span data-term="xy"></span></div>
+  <div id="summaryBox"></div>
+
+  <th:block th:if="${l.status.name() == 'READY'}">
+    <h2 class="section-title">행 보기 <span class="count" id="rowInfo"></span>
+      <span class="section-actions">
+        <select class="form-select form-select-sm" id="rowMarket" style="width:auto">
+          <option th:each="m : ${marketIds}" th:value="${m}" th:text="${marketLabels.get(m)}"></option>
+        </select>
+        <select class="form-select form-select-sm" id="rowStatus" style="width:auto">
+          <option value="">모든 상태</option>
+          <option th:each="o : ${outcomes}" th:value="${o.name()}" th:text="${o.label}"></option>
+        </select>
+      </span>
+    </h2>
+    <div class="toolbar">
+      <span class="small muted">탐색 기간의 행만 보여줍니다. 판단 시각은 1분봉 시작 시각입니다 (판단 시점은 그 1분 뒤).</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowPrev">← 이전 50</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="rowNext">다음 50 →</button>
+    </div>
+    <div class="db-table-wrap">
+      <table class="db-table db-table--compact">
+        <thead><tr><th>판단 봉 (KST)</th><th>상태</th><th class="num"><span data-term="entryPrice">진입가</span></th><th class="num">목표가</th><th class="num">손실가</th>
+          <th><span data-term="labelEndTime">판정 종료 (KST)</span></th><th class="num"><span data-term="barsToEvent">경과 분</span></th><th class="num"><span data-term="timeoutReturn">만료 수익률</span></th></tr></thead>
+        <tbody id="rowBody"></tbody>
+      </table>
+    </div>
+  </th:block>
+
+  <h2 class="section-title">이 정답으로 만든 분할 계획 <span class="count" th:text="${children.size()}">0</span></h2>
+  <div class="db-table-wrap" th:if="${!children.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th>만든 시각 (KST)</th></tr></thead>
+      <tbody><tr th:each="p : ${children}">
+        <td class="num faint" th:text="${'#' + p.id}"></td>
+        <td><a class="row-title" th:href="@{/splits/{id}(id=${p.id})}" th:text="${p.name}"></a></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${p.status})}"></span></td>
+        <td class="num" th:text="${TU.toKstText(p.createdAt)}"></td>
+      </tr></tbody>
+    </table>
+  </div>
+  <div class="small muted" th:if="${children.isEmpty()}">아직 없습니다.</div>
+</div>
+
+<th:block layout:fragment="scripts">
+  <script th:inline="javascript">
+    var LABEL = { id: /*[[${l.id}]]*/ 0, summary: JSON.parse(/*[[${summaryJson}]]*/ 'null') };
+  </script>
+  <script th:src="@{/js/label-common.js}"></script>
+  <script>
+    $(function () {
+      var $info = $('#jobInfo');
+      if ($info.length) App.watchJob($('#jobBox'), $info.data('job'), function () { window.location.reload(); });
+      LabelView.render($('#summaryBox'), LABEL.summary);
+      if (!LABEL.summary) $('#summaryBox').html('<div class="small muted">아직 계산되지 않았습니다.</div>');
+      if (!$('#rowBody').length) return;
+      var offset = 0, total = 0;
+      function load(o) {
+        App.api('GET', '/api/labels/' + LABEL.id + '/rows', { marketId: $('#rowMarket').val(), status: $('#rowStatus').val(), offset: o, limit: 50 }).done(function (res) {
+          offset = res.offset; total = res.total;
+          $('#rowInfo').text(total ? App.formatNumber(offset + 1) + ' ~ ' + App.formatNumber(offset + res.rows.length) + ' / ' + App.formatNumber(total) + '행' : '0행');
+          $('#rowBody').html(res.rows.map(function (r) {
+            return '<tr><td class="num">' + App.toKst(r.time) + '</td><td><span class="legend-dot c-' + r.status + '"></span><span data-hover-term="out_' + r.status + '">' + App.esc(LabelView.NAME[r.status]) + '</span></td>' +
+              '<td class="num">' + App.smart(r.entry) + '</td><td class="num">' + App.smart(r.target) + '</td><td class="num">' + App.smart(r.stop) + '</td>' +
+              '<td class="num">' + (r.endTime ? App.toKst(r.endTime) : '<span class="faint">–</span>') + '</td>' +
+              '<td class="num">' + (r.bars == null ? '–' : r.bars) + '</td><td class="num">' + (r.timeoutReturn == null ? '–' : r.timeoutReturn.toFixed(3) + '%') + '</td></tr>';
+          }).join('') || '<tr><td colspan="8" class="muted small">행이 없습니다.</td></tr>');
+        });
+      }
+      $('#rowMarket, #rowStatus').on('change', function () { load(0); });
+      $('#rowPrev').on('click', function () { load(Math.max(0, offset - 50)); });
+      $('#rowNext').on('click', function () { if (offset + 50 < total) load(offset + 50); });
+      load(0);
+    });
+  </script>
+</th:block>
+</body>
+</html>

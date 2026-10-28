@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/default}">
+<head><title>정답 (H·P·L)</title></head>
+<body>
+<div layout:fragment="topbar" class="topbar"><span class="crumb current">🎯 정답 (H·P·L)</span></div>
+
+<div layout:fragment="content" class="page page--wide" th:with="TU=${T(com.mch.strategy.common.TimeUtils)}">
+  <div class="page-head page-head--row">
+    <div>
+      <div class="page-icon">🎯</div>
+      <h1 class="page-title">정답 (H·P·L)</h1>
+      <div class="page-desc">판단 뒤 최대 <span data-term="horizonH">H분</span> 동안 목표 수익 <span data-term="targetP">P</span> 와 허용 손실 <span data-term="stopL">L</span> 중 먼저 일어난 사건입니다. 정답 정의 하나 = 한 버전입니다.</div>
+    </div>
+    <div class="page-head-actions"><a class="btn btn-primary" th:href="@{/labels/new}">＋ 정답 만들기</a></div>
+  </div>
+  <div th:replace="~{fragments/ui :: flow(3)}"></div>
+
+  <div class="db-table-wrap" th:if="${!labels.isEmpty()}">
+    <table class="db-table">
+      <thead><tr><th>#</th><th>이름</th><th>상태</th><th>지표 데이터셋</th><th class="num">H</th><th class="num">P</th><th class="num">L</th>
+        <th>규칙</th><th><span data-term="exploreTo">탐색 끝 (UTC)</span></th><th class="num">분할</th><th>만든 시각 (KST)</th><th></th></tr></thead>
+      <tbody>
+      <tr th:each="l : ${labels}" th:with="c=${configs.get(l.id)}">
+        <td class="num faint" th:text="${'#' + l.id}"></td>
+        <td><a class="row-title" th:href="@{/labels/{id}(id=${l.id})}" th:text="${l.name}"></a>
+          <div class="small muted" th:if="${l.description != null}" th:text="${l.description}"></div></td>
+        <td><span th:replace="~{fragments/ui :: statusTag(${l.status})}"></span></td>
+        <td><a class="link small" th:href="@{/features/{id}(id=${l.featureSetId})}" th:text="${'#' + l.featureSetId + ' ' + featureNames.getOrDefault(l.featureSetId, '(지워짐)')}"></a></td>
+        <td class="num" th:text="${c.horizon + '분'}"></td>
+        <td class="num" th:text="${c.targetPct + '%'}"></td>
+        <td class="num" th:text="${c.stopPct + '%'}"></td>
+        <td class="small" th:text="${(c.isLong() ? 'long' : 'short') + ' · ' + (c.entryNextOpen() ? '다음 시가' : '종가') + ' · ' + (c.stopFirst() ? '동시=손실' : '동시=불가') + (c.costEnabled ? ' · 비용' : '')}"></td>
+        <td class="num" th:text="${TU.utcDate(l.exploreTo)}"></td>
+        <td class="num" th:text="${splitCounts.get(l.id)}"></td>
+        <td class="num" th:text="${TU.toKstText(l.createdAt)}"></td>
+        <td><a class="btn btn-ghost btn-sm" th:if="${l.status.name() == 'READY'}" th:href="@{/splits/new(labelSetId=${l.id})}">분할 만들기 →</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty" th:if="${labels.isEmpty()}">
+    <div class="empty-icon">🎯</div>
+    <div>아직 만든 정답이 없습니다.</div>
+    <a class="btn btn-primary" style="margin-top:12px" th:href="@{/labels/new}">＋ 정답 만들기</a>
+  </div>
+</div>
+</body>
+</html>

@@ -9,11 +9,33 @@
   <div class="page-desc" th:if="${desc != null}" th:text="${desc}">설명</div>
 </div>
 
-<!-- 상태 태그: DatasetStatus 이름을 받아 색을 정한다 -->
-<span th:fragment="statusTag(status, label)" class="tag"
-      th:classappend="${status == 'READY'} ? 'tag-green' : (${status == 'FAILED'} ? 'tag-red' : (${status == 'PENDING'} ? '' : 'tag-blue'))">
-  <span class="dot"></span><th:block th:text="${label}">상태</th:block>
+<!-- 상태 태그: BuildStatus 를 받아 색을 정한다 -->
+<span th:fragment="statusTag(status)" class="tag"
+      th:classappend="${status.name() == 'READY'} ? 'tag-green' : (${status.name() == 'FAILED'} ? 'tag-red' : (${status.name() == 'PENDING'} ? '' : 'tag-blue'))">
+  <span class="dot"></span><th:block th:text="${status.label}">상태</th:block>
 </span>
+
+<!-- 흐름 위치: 지금 단계를 진하게 -->
+<div th:fragment="flow(step)" class="flow-mini">
+  <span th:classappend="${step == 1} ? 'on'">① 원본 1분봉</span><span class="arr">→</span>
+  <span th:classappend="${step == 2} ? 'on'">② 기술 지표</span><span class="arr">→</span>
+  <span th:classappend="${step == 3} ? 'on'">③ H·P·L 정답</span><span class="arr">→</span>
+  <span th:classappend="${step == 4} ? 'on'">④ 시간순 분할</span><span class="arr">→</span>
+  <span class="later">모델 학습·평가 (후속)</span>
+</div>
+
+<!-- 작업 진행률 상자. App.watchJob($('#jobBox'), jobId, onDone) 로 채운다 -->
+<div th:fragment="jobBox" id="jobBox" class="job-box" style="display:none">
+  <h2 class="section-title" style="margin-top:0">진행 상황
+    <span class="small muted job-step" style="font-weight:500"></span>
+    <span class="section-actions"><button type="button" class="btn btn-danger-ghost btn-sm job-cancel" style="display:none">■ 중지</button></span>
+  </h2>
+  <div class="progress-thin"><span></span></div>
+  <div class="small muted job-text" style="margin-top:6px">0%</div>
+  <div class="callout callout-red job-fail" style="display:none; margin-top:12px">
+    <div class="callout-icon">⚠️</div><div class="callout-body job-fail-text"></div>
+  </div>
+</div>
 
 </body>
 </html>
